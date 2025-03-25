@@ -1,4 +1,4 @@
-{
+﻿{
   "version": "0.2.0",
   "configurations": [
     {
@@ -6,7 +6,7 @@
       "request": "launch",
       "name": "Launch Program",
       "skipFiles": [ "<node_internals>/**" ],
-      "program": "${workspaceFolder}/app.js",
+      "program": "${workspaceFolder}/test.js",
       "cwd": "${workspaceFolder}",
       "console": "externalTerminal"
     }

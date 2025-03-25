@@ -1,0 +1,23 @@
+{
+  "isProduction": true,
+  "production": {
+    "ws-user": {
+      "pathToFrontendErrors": "log/frontend_errors.log",
+      "pathToLoggedUsers": "logged_users.json",
+      "pathToUsersDir": "users"
+    },
+    "nodemailer": {
+      "host": "smtp-mail.outlook.com",
+      "port": 587,
+      "secureConnection": false,
+      "tls": {
+        "ciphers": "SSLv3"
+      },
+      "auth": {
+        "user": "*user*@outlook.com",
+        "pass": ""
+      }
+    }
+  },
+  "development": {}
+}
