@@ -20,7 +20,7 @@
 <div class="p-2 markdown-body" data-bs-spy="scroll" data-bs-target="#list-headers" data-bs-offset="0" tabindex="0">
 
 # WS-User  
-This manual is also available in [HTML5](https://manuel-lohmus.github.io/ws-userg/README.html).
+This manual is also available in [HTML5](https://manuel-lohmus.github.io/ws-user/README.html).
 
 ## Overview  
 WS-User module is a library that manages user data over the websocket protocol.<br>
