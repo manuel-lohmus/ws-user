@@ -1,0 +1,58 @@
+﻿{
+  "name": "ws-user",
+  "description": "User authentication and authorization for WebSocket applications.",
+  "version": "1.0.0-beta.1",
+  "license": "MIT",
+  "keywords": [
+    "ws",
+    "user",
+    "authentication",
+    "authorization",
+    "application",
+    "login",
+    "logout",
+    "register",
+    "password",
+    "email",
+    "link",
+    "token",
+    "session",
+    "cookie"
+  ],
+  "author": "Manuel Lõhmus",
+  "browser": "browser.js",
+  "main": "index.js",
+  "exports": {
+    ".": {
+      "browser": "./browser.js",
+      "import": "./wrapper.mjs",
+      "require": "./index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "browser.js",
+    "index.js",
+    "LICENSE",
+    "package.json",
+    "README.md",
+    "README.html",
+    "wrapper.mjs"
+  ],
+  "scripts": {
+    "test": "echo \"No test specified\""
+  },
+  "dependencies": {
+    "config-sets": "^3.0.0-beta.9",
+    "data-context": "^2.0.0-beta.16",
+    "nodemailer": "^6.10.0",
+    "ws13": "^1.0.8"
+  },
+  "homepage": "https://github.com/manuel-lohmus/ws-user#readme",
+  "bugs": "https://github.com/manuel-lohmus/ws-user/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/manuel-lohmus/ws-user.git"
+  },
+  "funding": "https://manuel-lohmus.github.io/ws-user/README.html#license"
+}
