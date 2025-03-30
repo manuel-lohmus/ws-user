@@ -124,6 +124,18 @@
 
                     wsLink.datacontext.overwritingData(event.data);
                 };
+                wsLink.onclose = function (event) {
+
+                    // 1000: Normal Closure 
+                    if (event.code === 1000) { return; }
+
+                    // 1008: Policy Violation 
+                    //    The endpoint is terminating the connection because it received a message that violates its policy.
+                    //    This is a generic status code, used when codes 1003 and 1009 are not suitable.
+                    if (event.code === 1008 && root_datacontext?.user?.isLogged) { return; }
+
+                    reconnect();
+                };
             }
 
             return wsLink;
@@ -136,6 +148,18 @@
                 if (strChanges !== undefined) { wsLink.send(strChanges); }
 
                 return wsLink?.elements?.length;
+            }
+            function reconnect() {
+
+                if (wsUser?.readyState !== CreateWsUser.OPEN &&
+                    wsUser?.readyState !== CreateWsUser.PAUSE) {
+
+                    setTimeout(reconnect, 1500); // 1.5s
+
+                    return;
+                }
+
+                setTimeout(wsLink.reconnect, 100);
             }
         }
         // Private methods
@@ -167,6 +191,7 @@
              */
             var readyState = CreateWsUser.CONNECTING,
                 sendedData = null,
+                receivedData = null,
                 self = Object.create(null),
                 protocols = [protocol, connID],
                 ws = null;
@@ -223,16 +248,16 @@
 
             function newWebSocket() {
 
-                var ws = new WebSocket(path, protocols);
+                var _ws = new WebSocket(path, protocols);
 
-                ws.BinaryData = 'ArrayBuffer';
+                _ws.BinaryData = 'ArrayBuffer';
 
-                ws.onopen = onWsOpen;
-                ws.onmessage = onWsMessage;
-                ws.onerror = onWsError;
-                ws.onclose = onWsClose;
+                _ws.onopen = ws?.onopen || onWsOpen;
+                _ws.onmessage = ws?.onmessage || onWsMessage;
+                _ws.onerror = ws?.onerror || onWsError;
+                _ws.onclose = ws?.onclose || onWsClose;
 
-                return ws;
+                return _ws;
             }
             // Event handlers
             function onWsOpen() {
@@ -259,7 +284,11 @@
                     return;
                 }
 
+                pDebug('Message received', event);
+
                 if (commandHandling(event.data)) { return; }
+
+                receivedData = event.data;
 
                 if (typeof self.onmessage === 'function') {
 
@@ -268,8 +297,6 @@
 
                     return;
                 }
-
-                pDebug('Message received', event);
 
                 setTimeout(messageHandled);
             }
@@ -284,8 +311,11 @@
 
                 pDebug('Connection closed', event);
                 setReadyState(CreateWsUser.CLOSED);
-                self.onclose && self.onclose(event);
 
+                // 1000: Normal Closure 
+                // 1008: Policy Violation 
+                //    The endpoint is terminating the connection because it received a message that violates its policy.
+                //    This is a generic status code, used when codes 1003 and 1009 are not suitable.
                 if (event.code === 1000 || event.code === 1008) { return; }
 
                 if (userEmail && self.onuserinfo && ws?.protocol === "ws-user") {
@@ -293,12 +323,17 @@
                     self.onuserinfo({ userinfo: { message: 'Connection lost. Reconnecting...', alerttype: 'alert-warning' } });
                 }
 
-                setTimeout(() => {
+                if (protocol === 'ws-user') {
 
-                    if (event.code === 3001) { userEmail = ''; }
-                    reconnect(protocol);
+                    setTimeout(() => {
 
-                }, 1500); // 1.5s
+                        if (event.code === 3001) { userEmail = ''; }
+                        reconnect(protocol);
+
+                    }, 1500); // 1.5s
+                }
+
+                self.onclose && self.onclose(event);
             }
             // Public methods
             function send(data) {
@@ -313,10 +348,15 @@
                 // OPEN: 1
                 if (readyState === CreateWsUser.OPEN) {
 
-                    pDebug('Send - State => PAUSE');
-                    setReadyState(CreateWsUser.PAUSE);
-                    ws.send(data);
-                    sendedData = data;
+                    if (receivedData !== data) {
+
+                        pDebug('Send - State => PAUSE');
+                        setReadyState(CreateWsUser.PAUSE);
+                        pDebug(`'Sending message'`, data.replace(/\s+/g, ''));
+
+                        ws.send(data);
+                        sendedData = data;
+                    }
 
                     return;
                 }
@@ -335,8 +375,9 @@
             function reconnect(protocol, code = 1000, reason = 'Normal closure') {
 
                 setTimeout(() => {
+
                     ws = newWebSocket();
-                }, 100); // 100ms
+                });
 
                 close(code, reason);
             }

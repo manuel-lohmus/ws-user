@@ -9,6 +9,7 @@ var path = require('path'),
     DataContext = require('data-context'),
     configSets = require('config-sets'),
     userConfigSets = configSets('ws-user', {
+        isDebug: false,
         pathToFrontendErrors: 'log/frontend_errors.log',
         pathToLoggedUsers: 'logged_users.json',
         pathToUsersDir: 'users'
@@ -59,10 +60,10 @@ function sendMail(mailOptions, callback) {
     nodemailer.createTransport(nodemailerOptions)
         .sendMail(mailOptions, function (err, info) {
 
-            if (err) { console.error(err); callback(err); }
+            if (err) { pError(err); callback(err); }
 
             else {
-                //console.log(info);
+
                 var isOK = info.response.startsWith("250");
                 mailOptions.to
                     .split(",")
@@ -87,7 +88,6 @@ return module.exports = CreateWsUser;
  * @returns {WsUser}
  * 
  * @typedef {Object} Options
- * @property {boolean} isDebug - If set to true, more info in console. Default false
  * @property {http.IncomingMessage|http.ClientRequest} request - Reference link: https://nodejs.org/docs/latest/api/http.html#class-httpincomingmessage or https://nodejs.org/docs/latest/api/http.html#class-httpclientrequest
  * @property {Object.<string, string>} headers - Key-value pairs of header names and values. Header names are lower-cased.
  * @property {net.Socket} socket - This class is an abstraction of a TCP socket or a streaming IPC endpoint.
@@ -107,7 +107,6 @@ return module.exports = CreateWsUser;
  * @property {(code:number, reason:string)=>void} close - Closes the WebSocket connection or connection attempt, if any.
  */
 function CreateWsUser({
-    isDebug = false,
     request,
     url = '',
     headers,
@@ -131,6 +130,7 @@ function CreateWsUser({
         roles = [],
         organizations = [],
         sendedData = null,
+        receivedData = null,
         ws = createWebSocket(),
         self = Object.create(null);
 
@@ -159,7 +159,7 @@ function CreateWsUser({
         onclose: { value: null, writable: true, enumerable: false, configurable: false },
         onloggedin: { value: null, writable: true, enumerable: false, configurable: false },
         // Public methods
-        send: { value: send, writable: false, enumerable: false, configurable: false },
+        send: { value: sendData, writable: false, enumerable: false, configurable: false },
         messageHandled: { value: messageHandled, writable: false, enumerable: false, configurable: false },
         close: { value: close, writable: false, enumerable: false, configurable: false }
     });
@@ -222,7 +222,7 @@ function CreateWsUser({
             if (sendedData.startsWith('$userinfo')) { sendedData = null; }
         }
 
-        if (sendedData) { send(sendedData); }
+        if (sendedData) { sendData(sendedData); }
         self.onopen && self.onopen.call(self);
     }
     function onWsMessage(event) {
@@ -238,7 +238,8 @@ function CreateWsUser({
 
         if (executeCommand(event.data)) { return; }
 
-        pDebug('Message received', event);
+        pDebug(`'Message received'`, (event.data + '').replace(/\s+/g, '').substring(0, 64));
+        receivedData = event.data;
         self.onmessage && self.onmessage.call(self, event);
     }
     function onWsError(event) {
@@ -266,7 +267,7 @@ function CreateWsUser({
         }
     }
     // Public methods
-    function send(data) {
+    function sendData(data) {
 
         if (!data || !(data?.length || data?.byteLength)
             || self.readyState === CreateWsUser.CLOSING
@@ -278,16 +279,21 @@ function CreateWsUser({
         // OPEN: 1
         if (self.readyState === CreateWsUser.OPEN) {
 
-            pDebug('Send - State => PAUSE');
-            self.readyState = CreateWsUser.PAUSE;
-            ws.send(data);
-            sendedData = data;
+            if (receivedData !== data) {
+
+                pDebug('Send - State => PAUSE');
+                pDebug(`'Sending message'`, data.replace(/\s+/g, '').substring(0, 64));
+                self.readyState = CreateWsUser.PAUSE;
+
+                ws.send(data);
+                sendedData = data;
+            }
 
             return;
         }
 
         // Wait for connection to open and try again in 100ms intervals
-        setTimeout(send, 100, data);
+        setTimeout(sendData, 100, data);
     }
     function messageHandled() { ws.send(''); }
     function close(code = 1000, reason = 'Normal closure') {
@@ -673,7 +679,7 @@ function CreateWsUser({
 
                     if (err) {
 
-                        if (isDebug) {
+                        if (userConfigSets.isDebug) {
 
                             pDebug(user.email, 'securityCode', user.securityCode);
                         }
@@ -760,7 +766,7 @@ function CreateWsUser({
      */
     function sendUserinfo({ isLogged = false, message = '', alerttype = 'alert-success', user = {} } = {}) {
 
-        send('$userinfo:' + JSON.stringify({
+        sendData('$userinfo:' + JSON.stringify({
             isLogged,
             message,
             alerttype,
@@ -805,8 +811,8 @@ function CreateWsUser({
     }
 
     // Debugging
-    function pDebug(...args) { if (isDebug) { console.log(`[ DEBUG ] 'ws-user' `, ...args); } }
-    function pError(...args) { if (isDebug) { console.error(`[ ERROR ] 'ws-user' `, ...args); } }
+    function pDebug(...args) { if (userConfigSets.isDebug) { console.log(`[ DEBUG ] 'ws-user' protocol:`, protocol, ...args); } }
+    function pError(...args) { if (userConfigSets.isDebug) { console.error(`[ ERROR ] 'ws-user' protocol:`, protocol, ...args); } }
 }
 
 
