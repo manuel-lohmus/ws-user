@@ -1,4 +1,4 @@
-﻿
+
 /**  Copyright (c) 2021, Manuel Lõhmus (MIT License) */
 
 'use strict';
@@ -27,12 +27,10 @@ Object.defineProperties(CreateWsUser, {
 //*** nodemailer ***
 var nodemailer = require("nodemailer"),
     nodemailerOptions = configSets('nodemailer', {
-        host: "smtp-mail.outlook.com", // hostname
-        port: 587, // port for secure SMTP
-        secureConnection: false, // TLS requires secureConnection to be false
-        tls: { ciphers: 'SSLv3' },
+        isDebug: false,
+        domain_account: 'localhost',
         auth: {
-            user: "*user*@outlook.com",
+            user: "*user*@localhost",
             pass: ""
         }
     });
@@ -54,13 +52,24 @@ var nodemailer = require("nodemailer"),
  */
 function sendMail(mailOptions, callback) {
 
-    if (nodemailerOptions.auth.user === "*user*@outlook.com") { return callback(new Error("Please configure 'nodemailer' auth.user")); }
-    if (nodemailerOptions.auth.pass === "") { return callback(new Error("Please configure 'nodemailer' auth.pass")); }
+    if (nodemailerOptions.auth.user === "*user*@localhost" || nodemailerOptions.auth.pass === "") {
+
+        var errorMessage = "Please configure 'nodemailer' transporter options in 'config-sets.json' file.\n\tSee options: https://nodemailer.com/smtp/";
+
+        if (nodemailerOptions.isDebug) { console.error("[ ERROR ] 'nodemailer'", errorMessage); }
+
+        return callback(errorMessage);
+    }
 
     nodemailer.createTransport(nodemailerOptions)
         .sendMail(mailOptions, function (err, info) {
 
-            if (err) { pError(err); callback(err); }
+            if (err) {
+
+                if (nodemailerOptions.isDebug) { console.error("[ ERROR ] 'nodemailer'", err); }
+
+                callback(err);
+            }
 
             else {
 
@@ -69,6 +78,9 @@ function sendMail(mailOptions, callback) {
                     .split(",")
                     .map(function (str) { return str.trim() })
                     .forEach(function (str) { if (!info.accepted.includes(str)) { isOK = false; } });
+
+                if (nodemailerOptions.isDebug) { console.log("[ INFO ] 'nodemailer'", info); }
+
                 callback(isOK ? null : new Error("Sending email failed."));
             }
         });
@@ -525,14 +537,14 @@ function CreateWsUser({
 
                         saveUserDataToFile(self.create_account, function () {
 
-                            sendUserinfo({ isLogged: true, message: 'You are logged in.', user });
+                            sendUserinfo({ isLogged: true, message: 'You are logged in.', user: self.create_account });
+
+                            delete self.create_account;
 
                             if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: true }); } 
 
                             done();
                         });
-
-                        delete self.create_account;
 
                         return;
                     }
@@ -711,7 +723,7 @@ function CreateWsUser({
                         fileHtml = "./public/www/templates/security-code.html",
                         strText = fs.existsSync(fileText) ? fs.readFileSync(fileText).toString() : "",
                         strHtml = fs.existsSync(fileHtml) ? fs.readFileSync(fileHtml).toString() : "",
-                        domain = require('config-sets')()?.['tiny-https-server']?.contact_email.split('@').pop() || '';
+                        domain = nodemailerOptions.domain_account;
 
                     if (!domain || domain.includes('localhost')) {
 
