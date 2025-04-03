@@ -1,4 +1,4 @@
-﻿/**  Copyright (c) 2021, Manuel Lõhmus (MIT License) */
+/**  Copyright (c) 2021, Manuel Lõhmus (MIT License) */
 
 'use strict';
 
@@ -418,6 +418,7 @@
 
                     navigator.credentials
                         .get({
+                            mediation: "silent",
                             password: true,
                             federated: { providers: [location.origin] }
                         })
