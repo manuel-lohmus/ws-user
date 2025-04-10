@@ -183,7 +183,7 @@
 
             function getRandomInt(max) { return Math.floor(Math.random() * Math.floor(max)); }
         }
-        function createWebSocket(protocol, path) {
+        function createWebSocket(protocol, url) {
 
             /**
              * CONNECTING: 0 | OPEN: 1 | CLOSING: 2 | CLOSED: 3 | PAUSE: 4  
@@ -194,9 +194,8 @@
                 receivedData = null,
                 self = Object.create(null),
                 protocols = [protocol, connID],
-                ws = null;
-
-            path = new URL(path, location);
+                ws = null,
+                path = new URL(url, location);
 
             if (!userEmail) { sendedData = null; }
 
@@ -240,7 +239,7 @@
                 send: { value: send, writable: false, enumerable: false, configurable: false },
                 close: { value: close, writable: false, enumerable: false, configurable: false },
                 reconnect: {
-                    value: function (code = 1000, reason = 'Normal closure') { reconnect(protocol, code, reason); },
+                    value: function (code = 1000, reason = 'Normal closure') { reconnect(code, reason); },
                     writable: false, enumerable: false, configurable: false
                 }
             });
@@ -274,6 +273,17 @@
                 }
             }
             function onWsMessage(event) {
+
+                if (typeof event.data === 'string' && event.data.startsWith('$redirect_to_port:')) {
+
+                    // Redirect to another port
+                    ws.onclose = null;
+                    close();
+                    path.port = event.data.split(':').pop();
+                    ws = newWebSocket();
+
+                    return;
+                }
 
                 if (typeof event.data === 'string' && !event.data) {
 
@@ -312,6 +322,9 @@
                 pDebug('Connection closed', event);
                 setReadyState(CreateWsUser.CLOSED);
 
+                //Set the default path to the current location
+                path = new URL(url, location);
+
                 // 1000: Normal Closure 
                 // 1008: Policy Violation 
                 //    The endpoint is terminating the connection because it received a message that violates its policy.
@@ -328,7 +341,7 @@
                     setTimeout(() => {
 
                         if (event.code === 3001) { userEmail = ''; }
-                        reconnect(protocol);
+                        reconnect();
 
                     }, 1500); // 1.5s
                 }
@@ -372,7 +385,7 @@
                 setReadyState(CreateWsUser.CLOSING);
                 ws?.close(code, reason);
             }
-            function reconnect(protocol, code = 1000, reason = 'Normal closure') {
+            function reconnect(code = 1000, reason = 'Normal closure') {
 
                 setTimeout(() => {
 

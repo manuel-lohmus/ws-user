@@ -364,7 +364,7 @@ function CreateWsUser({
                     }
 
                     fs.appendFile(filePath, text, function (err) {
-                        if (err) { pDebug(err); }
+                        if (err) { pError(err); }
                     });
 
                     pError('Frontend:', msg);
