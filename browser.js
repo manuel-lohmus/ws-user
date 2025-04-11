@@ -34,22 +34,56 @@
             if (CreateWsUser === this?.constructor) { throw new Error('CreateWsUser must be called without `new` keyword!'); }
 
             isDebug = debugMode;
-            this.onerror = onError;
+            this.onerror = onerror;
+            this.onbeforeunload = onbeforeunload;
+            this.onclick = onclick;
 
             wsUser = createWebSocket('ws-user', url);
 
             return wsUser;
 
 
-            function onError(msg, url, line, col) {
+            function onerror(msg, url, line, col) {
 
                 var err = `${msg} > ${url} > line:${line} col:${col}`;
                 if (isDebug) { console.warn(err); }
                 wsUser?.send('$log_error: ' + err);
-                wsUser?.send('');
 
                 var suppressErrorAlert = isDebug;
                 return suppressErrorAlert;
+            }
+            function onbeforeunload(event) {
+
+                // 1000: Normal Closure
+                if (wsUser?.readyState === CreateWsUser.OPEN) {
+
+                    logout(connID);
+                    setTimeout(wsUser.close, 500);
+                }
+
+                return;
+            }
+            function onclick(event) {
+
+                var el = event.target
+
+                if (!onclick.obj) { onclick.obj = {}; }
+
+                while (el.href || el.parentElement) {
+
+                    if (el.href) {
+
+                        onclick.obj[el.href] = onclick.obj[el.href]
+                            ? onclick.obj[el.href] + 1 : 1;
+                        break;
+                    }
+                    el = el.parentElement;
+                }
+            }
+            function logout(conn_id = '') {
+                
+                wsUser.send('$log:' + JSON.stringify(onclick.obj));
+                wsUser.logout(conn_id);
             }
         }
         function CreateLink(path, element) {
@@ -195,7 +229,8 @@
                 self = Object.create(null),
                 protocols = [protocol, connID],
                 ws = null,
-                path = new URL(url, location);
+                path = new URL(url, location),
+                autoLoginTimeout = null;
 
             if (!userEmail) { sendedData = null; }
 
@@ -265,18 +300,22 @@
                 setReadyState(CreateWsUser.OPEN);
                 if (sendedData) { send(sendedData); }
                 self.onopen && self.onopen();
-                setTimeout(autoLogin, 500);
+                autoLoginTimeout = setTimeout(function () {
 
-                if (root_datacontext?.user?.isLogged && ws?.protocol === "ws-user") {
+                    if (root_datacontext?.user?.isLogged && ws?.protocol === "ws-user") {
 
-                    self.onuserinfo({ userinfo: { message: 'Connection restored.', alerttype: 'alert-success' } });
-                }
+                        self.onuserinfo({ userinfo: { message: 'Connection restored.', alerttype: 'alert-success' } });
+                    }
+                    else { autoLogin(); }
+
+                }, 1000); // 1s
             }
             function onWsMessage(event) {
 
                 if (typeof event.data === 'string' && event.data.startsWith('$redirect_to_port:')) {
 
                     // Redirect to another port
+                    clearTimeout(autoLoginTimeout);
                     ws.onclose = null;
                     close();
                     path.port = event.data.split(':').pop();
@@ -399,11 +438,11 @@
                 send('$login:' + masking(`${email}:${password}`, connID));
                 setTimeout(rememberUser, 1000, email, password, remember);
             }
-            function logout() {
+            function logout(conn_id = '') {
 
-                send(`$logout`);
+                send(`$logout:${conn_id}`);
 
-                if ('credentials' in navigator) {
+                if (!conn_id && navigator.credentials) {
 
                     navigator.credentials.preventSilentAccess().catch(pError);
                 }
@@ -444,7 +483,7 @@
             }
             function rememberUser(email, password, remember) {
 
-                if (remember !== undefined && 'credentials' in navigator) {
+                if (remember !== undefined && navigator.credentials) {
 
                     if (remember) {
 

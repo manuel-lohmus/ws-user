@@ -10,7 +10,8 @@ var path = require('path'),
     configSets = require('config-sets'),
     userConfigSets = configSets('ws-user', {
         isDebug: false,
-        pathToFrontendErrors: 'log/frontend_errors.log',
+        pathToFrontendErrorFile: 'log/frontend_errors.log',
+        pathToLogFile: '',
         pathToLoggedUsers: 'logged_users.json',
         pathToUsersDir: 'users'
     }),
@@ -350,6 +351,28 @@ function CreateWsUser({
         function execute(msgObj) {
 
             var functionMap = {
+                log: function (msg) {
+
+                    if (!msg || !userConfigSets.pathToLogFile) { return; }
+                    
+                    var text = `[${new Date().toISOString()}][ ${ws?.ip || 'undefined'} ]\t${msg}\n`;
+                    var filePath = path.resolve(path.parse(process.argv[1]).dir.split("node_modules").shift(), userConfigSets.pathToLogFile);
+
+                    if (!fs.existsSync(path.parse(filePath).dir)) {
+
+                        fs.mkdirSync(
+                            path.parse(filePath).dir,
+                            { recursive: true }
+                        );
+                    }
+
+                    fs.appendFile(filePath, text, function (err) {
+
+                        if (err) { pError(err); }
+                    });
+
+                    done();
+                },
                 log_error: function (msg) {
 
                     var text = `[${new Date().toISOString()}][ ERROR ]\t${msg}\n`;
@@ -364,6 +387,7 @@ function CreateWsUser({
                     }
 
                     fs.appendFile(filePath, text, function (err) {
+
                         if (err) { pError(err); }
                     });
 
@@ -426,14 +450,32 @@ function CreateWsUser({
 
                     sendUserinfo({ isLogged: true, message: 'You are logged in.', user });
 
+                    if (!user.ip_addresses) { user.ip_addresses = []; }
+
+                    if (!user.ip_addresses.includes(ws.ip)) {
+
+                        user.ip_addresses.push(ws.ip);
+                        saveUserDataToFile(user, function () { done(); });
+                    }
+
                     if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: true }); } 
 
                     done();
                 },
                 logout: function (msg) {
 
-                    delete loggedUsers[email];
-                    sendUserinfo({ message: 'You are logged out.' });
+                    var conn_id = msg;
+
+                    if (conn_id && loggedUsers[email]) {
+
+                        loggedUsers[email].connIDs = loggedUsers[email].connIDs.filter(c => c !== conn_id);
+                        sendUserinfo({ message: 'You are logged out.' });
+                    }
+                    else {
+
+                        delete loggedUsers[email];
+                        sendUserinfo({ message: 'You are logged out everywhere.' });
+                    }
 
                     if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: false }); } 
 
