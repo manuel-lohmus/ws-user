@@ -81,8 +81,9 @@
                 }
             }
             function logout(conn_id = '') {
-                
-                wsUser.send('$log:' + JSON.stringify(onclick.obj));
+
+                if (onclick.obj && Object.keys(onclick.obj).length) 
+                { wsUser.send('$log:' + JSON.stringify(onclick.obj)); }
                 wsUser.logout(conn_id);
             }
         }

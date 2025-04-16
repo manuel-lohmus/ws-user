@@ -267,7 +267,7 @@ function CreateWsUser({
         self.onclose && self.onclose.call(self, event);
 
         // websocket - Going Away
-        if (isWsUser && event.code === 1001) { connLogout(); }
+        if (isWsUser && (event.code === 1001 || event.code === 1006)) { connLogout(); }
 
         function connLogout() {
 
