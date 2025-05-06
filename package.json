@@ -1,7 +1,7 @@
 {
   "name": "ws-user",
   "description": "User authentication and authorization for WebSocket applications.",
-  "version": "1.0.0-beta.7",
+  "version": "1.0.0-beta.8",
   "license": "MIT",
   "keywords": [
     "ws",
@@ -43,8 +43,8 @@
     "test": "echo \"No test specified\""
   },
   "dependencies": {
-    "config-sets": "^3.0.0-beta.11",
-    "data-context": "^2.0.0-beta.19",
+    "config-sets": "^3.0.0-beta.12",
+    "data-context": "^2.0.0-beta.21",
     "nodemailer": "^6.10.1",
     "ws13": "^1.0.8"
   },

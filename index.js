@@ -1,5 +1,4 @@
-
-/**  Copyright (c) 2021, Manuel Lõhmus (MIT License) */
+/**  Copyright (c) Manuel Lõhmus (MIT License) */
 
 'use strict';
 
@@ -145,6 +144,7 @@ function CreateWsUser({
         sendedData = null,
         receivedData = null,
         ws = createWebSocket(),
+        location = origin || headers?.origin || request?.headers?.origin,
         self = Object.create(null);
 
     if (!ws) { return null; }
@@ -355,8 +355,16 @@ function CreateWsUser({
 
                     if (!msg || !userConfigSets.pathToLogFile) { return; }
                     
-                    var text = `[${new Date().toISOString()}][ ${ws?.ip || 'undefined'} ]\t${msg}\n`;
-                    var filePath = path.resolve(path.parse(process.argv[1]).dir.split("node_modules").shift(), userConfigSets.pathToLogFile);
+                    var text = `${new Date().toISOString()}|${ws?.ip || 'undefined'}`;
+                    while (text.length < 40) { text += ' '; }
+                    text += `${msg}\n`;
+                    var filePath = path.parse(userConfigSets.pathToLogFile);
+                    filePath.base = location.substring(location.indexOf('//') + 2) + ('_' + filePath.base || '.log');
+                    filePath = path.resolve(
+                        path.parse(process.argv[1]).dir.split("node_modules").shift(),
+                        filePath.dir,
+                        filePath.base
+                    );
 
                     if (!fs.existsSync(path.parse(filePath).dir)) {
 

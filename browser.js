@@ -1,4 +1,4 @@
-/**  Copyright (c) 2021, Manuel Lõhmus (MIT License) */
+/**  Copyright (c) Manuel Lõhmus (MIT License) */
 
 'use strict';
 
@@ -7,6 +7,7 @@
     exportModule("ws-user", ["data-context", 'data-context-binding'], function factory(DC, DB) {
 
         var isDebug = false,
+            wsOrigin = '', 
             wsUser = null,
             userEmail = '',
             connID = generateConnectionID(),
@@ -37,6 +38,7 @@
             this.onerror = onerror;
             this.onbeforeunload = onbeforeunload;
             this.onclick = onclick;
+            onclick.obj = { '/': 1 };
 
             wsUser = createWebSocket('ws-user', url);
 
@@ -65,19 +67,22 @@
             }
             function onclick(event) {
 
-                var el = event.target
+                var k = gethref(event.target);
 
                 if (!onclick.obj) { onclick.obj = {}; }
+                if (k) { onclick.obj[k] = onclick.obj[k] ? onclick.obj[k] + 1 : 1; }
 
-                while (el.href || el.parentElement) {
 
-                    if (el.href) {
+                function gethref(el) {
 
-                        onclick.obj[el.href] = onclick.obj[el.href]
-                            ? onclick.obj[el.href] + 1 : 1;
-                        break;
+                    while (el.href || el.parentElement) {
+
+                        if (el.href) {
+
+                            return el.href.replace(location.origin, '');
+                        }
+                        el = el.parentElement;
                     }
-                    el = el.parentElement;
                 }
             }
             function logout(conn_id = '') {
@@ -158,6 +163,7 @@
                     }
 
                     wsLink.datacontext.overwritingData(event.data);
+                    wsLink.datacontext.resetChanges();
                 };
                 wsLink.onclose = function (event) {
 
@@ -178,9 +184,14 @@
 
             function onchange(event) {
 
-                var strChanges = wsLink.datacontext.stringifyChanges();
+                clearTimeout(onchange.timeout);
 
-                if (strChanges !== undefined) { wsLink.send(strChanges); }
+                onchange.timeout = setTimeout(function () {
+
+                    var strChanges = wsLink.datacontext.stringifyChanges();
+
+                    if (strChanges !== undefined) { wsLink.send(strChanges); }
+                }, 10);
 
                 return wsLink?.elements?.length;
             }
@@ -226,12 +237,13 @@
              */
             var readyState = CreateWsUser.CONNECTING,
                 sendedData = null,
-                receivedData = null,
                 self = Object.create(null),
                 protocols = [protocol, connID],
                 ws = null,
-                path = new URL(url, location),
+                path = new URL(url, wsOrigin || location),
                 autoLoginTimeout = null;
+
+            if (!wsOrigin) { wsOrigin = path.origin; }
 
             if (!userEmail) { sendedData = null; }
 
@@ -338,8 +350,6 @@
 
                 if (commandHandling(event.data)) { return; }
 
-                receivedData = event.data;
-
                 if (typeof self.onmessage === 'function') {
 
                     self.onmessage(event)
@@ -363,7 +373,7 @@
                 setReadyState(CreateWsUser.CLOSED);
 
                 //Set the default path to the current location
-                path = new URL(url, location);
+                path = new URL(url, wsOrigin || location);
 
                 // 1000: Normal Closure 
                 // 1008: Policy Violation 
@@ -401,15 +411,12 @@
                 // OPEN: 1
                 if (readyState === CreateWsUser.OPEN) {
 
-                    if (receivedData !== data) {
+                    pDebug('Send - State => PAUSE');
+                    setReadyState(CreateWsUser.PAUSE);
+                    pDebug(`'Sending message'`, data.replace(/\s+/g, ''));
 
-                        pDebug('Send - State => PAUSE');
-                        setReadyState(CreateWsUser.PAUSE);
-                        pDebug(`'Sending message'`, data.replace(/\s+/g, ''));
-
-                        ws.send(data);
-                        sendedData = data;
-                    }
+                    ws.send(data);
+                    sendedData = data;
 
                     return;
                 }
