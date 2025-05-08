@@ -142,7 +142,6 @@ function CreateWsUser({
         roles = [],
         organizations = [],
         sendedData = null,
-        receivedData = null,
         ws = createWebSocket(),
         location = origin || headers?.origin || request?.headers?.origin,
         self = Object.create(null);
@@ -204,7 +203,7 @@ function CreateWsUser({
         }
 
         ws = require('ws13')({
-            isDebug: false,
+            isDebug: userConfigSets.isDebug,
             request,
             headers,
             socket,
@@ -252,7 +251,6 @@ function CreateWsUser({
         if (executeCommand(event.data)) { return; }
 
         pDebug(`'Message received'`, (event.data + '').replace(/\s+/g, '').substring(0, 64));
-        receivedData = event.data;
         self.onmessage && self.onmessage.call(self, event);
     }
     function onWsError(event) {
@@ -292,15 +290,12 @@ function CreateWsUser({
         // OPEN: 1
         if (self.readyState === CreateWsUser.OPEN) {
 
-            if (receivedData !== data) {
+            pDebug('Send - State => PAUSE');
+            pDebug(`'Sending message'`, data.replace(/\s+/g, '').substring(0, 64));
+            self.readyState = CreateWsUser.PAUSE;
 
-                pDebug('Send - State => PAUSE');
-                pDebug(`'Sending message'`, data.replace(/\s+/g, '').substring(0, 64));
-                self.readyState = CreateWsUser.PAUSE;
-
-                ws.send(data);
-                sendedData = data;
-            }
+            ws.send(data);
+            sendedData = data;
 
             return;
         }
@@ -359,7 +354,7 @@ function CreateWsUser({
                     while (text.length < 40) { text += ' '; }
                     text += `${msg}\n`;
                     var filePath = path.parse(userConfigSets.pathToLogFile);
-                    filePath.base = location.substring(location.indexOf('//') + 2) + ('_' + filePath.base || '.log');
+                    filePath.base = location.substring(location.indexOf('//') + 2) + ('-' + filePath.base || '.log');
                     filePath = path.resolve(
                         path.parse(process.argv[1]).dir.split("node_modules").shift(),
                         filePath.dir,
