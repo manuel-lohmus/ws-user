@@ -4,18 +4,19 @@
 
 (function () {
 
-    exportModule("ws-user", ["data-context", 'data-context-binding'], function factory(DC, DB) {
+    exportModule('ws-user', ["data-context", 'data-context-binding'], function factory(DC, DB) {
 
-        var isDebug = false,
-            wsOrigin = '', 
+        var globalScope = this,
+            isDebug = document && Array.from(document.scripts).find(function (s) { return s.src.includes('ws-user'); }).attributes.debug || false,
+            wsOrigin = '',
             wsUser = null,
             userEmail = '',
             connID = generateConnectionID(),
-            root_datacontext = DB();
+            root_datacontext = DB() || DC({});
 
         root_datacontext.isWsOnline = false;
 
-        CreateWsUser = CreateWsUser.bind(this);
+        waitForReadyState("complete", autoConnect);
 
         return Object.defineProperties(CreateWsUser, {
             CONNECTING: { value: 0, writable: false, enumerable: false, configurable: false },
@@ -23,21 +24,27 @@
             CLOSING: { value: 2, writable: false, enumerable: false, configurable: false },
             CLOSED: { value: 3, writable: false, enumerable: false, configurable: false },
             PAUSE: { value: 4, writable: false, enumerable: false, configurable: false },
-            CreateLink: { value: CreateLink, writable: false, enumerable: false, configurable: false }
+            CreateLink: { value: CreateLink, writable: false, enumerable: false, configurable: false },
+            wsUserURL: { value: (location.protocol == 'http:' ? 'ws://' : 'wss://') + location.hostname + ':' + ((location.port || location.protocol == 'http:' && 80 || 443) + 1), writable: true, enumerable: false, configurable: false },
+            navigationLinksTemplate: { value: 'templates/navigation-links-user.html', writable: true, enumerable: false, configurable: false },
+            confirmMailModalTemplate: { value: 'templates/confirm-mail-modal.html', writable: true, enumerable: false, configurable: false },
+            confirmMailTemplate: { value: 'templates/confirm-mail.html', writable: true, enumerable: false, configurable: false },
+            resetPasswordModalTemplate: { value: 'templates/reset-password-modal.html', writable: true, enumerable: false, configurable: false },
+            resetPasswordTemplate: { value: 'templates/reset-password.html', writable: true, enumerable: false, configurable: false },
         });
 
 
         function CreateWsUser({
-            debugMode = false,
+            debugMode = undefined,
             url = ''
         } = {}) {
 
             if (CreateWsUser === this?.constructor) { throw new Error('CreateWsUser must be called without `new` keyword!'); }
 
-            isDebug = debugMode;
-            this.onerror = onerror;
-            this.onbeforeunload = onbeforeunload;
-            this.onclick = onclick;
+            if (typeof debugMode === 'boolean') { isDebug = debugMode; }
+            globalScope.onerror = onerror;
+            globalScope.onbeforeunload = onbeforeunload;
+            globalScope.onclick = onclick;
             onclick.obj = { '/': 1 };
 
             wsUser = createWebSocket('ws-user', url);
@@ -240,7 +247,7 @@
                 self = Object.create(null),
                 protocols = [protocol, connID],
                 ws = null,
-                path = new URL(url, wsOrigin || location),
+                path = new URL(url, wsOrigin || CreateWsUser.wsUserURL || location),
                 autoLoginTimeout = null;
 
             if (!wsOrigin) { wsOrigin = path.origin; }
@@ -265,6 +272,7 @@
                     update_name: { value: update_name, writable: false, enumerable: false, configurable: false },
                     update_password: { value: update_password, writable: false, enumerable: false, configurable: false },
                     security_code: { value: security_code, writable: false, enumerable: false, configurable: false },
+                    datacontext: { get: function () { return root_datacontext.user }, enumerable: false, configurable: false },
                 });
 
                 //commands.userinfo = userinfo;
@@ -289,7 +297,7 @@
                 reconnect: {
                     value: function (code = 1000, reason = 'Normal closure') { reconnect(code, reason); },
                     writable: false, enumerable: false, configurable: false
-                }
+                },
             });
 
 
@@ -497,7 +505,7 @@
 
                         navigator.credentials.store(new PasswordCredential({
                             origin: location.origin,
-                            iconURL: $('link[rel=icon]')?.href || '',
+                            iconURL: document.querySelector('link[rel=icon]')?.href || '',
                             id: email,
                             name: root_datacontext?.user?.name || '',
                             password
@@ -537,6 +545,18 @@
                     if (msgObj.cmd === 'userinfo') {
 
                         userinfo(msgObj.rawBody, messageHandled);
+
+                        return;
+                    }
+
+                    if (msgObj.cmd === 'resources') {
+
+                        if (!root_datacontext.resources?._isDataContext) { datacontext.resources = DC(datacontext.resources || []); }
+
+                        root_datacontext.resources.overwritingData(msgObj.rawBody);
+                        root_datacontext.resources.resetChanges();
+
+                        messageHandled();
 
                         return;
                     }
@@ -589,9 +609,42 @@
                 DC.syncData(root_datacontext.user, JSON.parse(msg));
                 userEmail = root_datacontext.user.email;
 
+                if (!root_datacontext.user.isLogged && globalScope.UFE) { globalScope.UFE.renderIndexContent(); }
+
+                if (root_datacontext.user.message && globalScope.UFE) {
+
+                    setTimeout(globalScope.UFE.showAlert, 100, root_datacontext.user.message, root_datacontext.user.alerttype);
+                }
+
+                if (root_datacontext.user.securityCode && globalScope.UFE && CreateWsUser.confirmMailModalTemplate) {
+
+                    globalScope.UFE.openModal(CreateWsUser.confirmMailModalTemplate);
+                }
+                else if (root_datacontext.user.securityCode && globalScope.UFE && CreateWsUser.confirmMailTemplate) {
+
+                    globalScope.UFE.renderContent(CreateWsUser.confirmMailTemplate);
+                }
+
+                if (root_datacontext.user.resetPassword && globalScope.UFE && CreateWsUser.resetPasswordModalTemplate) {
+
+                    globalScope.UFE.openModal(CreateWsUser.resetPasswordModalTemplate);
+                }
+                else if (root_datacontext.user.resetPassword && globalScope.UFE && CreateWsUser.resetPasswordTemplate) {
+
+                    globalScope.UFE.renderContent(CreateWsUser.resetPasswordTemplate);
+                }
+
+                if (root_datacontext.user.roles?.includes('user') && globalScope.UFE?.navigationLinksContainerSelector) {
+
+                    var contentDiv = document.querySelector(globalScope.UFE.navigationLinksContainerSelector);
+                    contentDiv.innerHTML = '';
+                    contentDiv.setAttribute('template', CreateWsUser.navigationLinksTemplate);
+                    DB.bindAllElements(contentDiv);
+                }
+
                 if (self.onuserinfo) {
 
-                    self.onuserinfo({ userinfo: root_datacontext.user });
+                    self.onuserinfo({ user: root_datacontext.user });
                 }
 
                 done();
@@ -600,6 +653,22 @@
             // Debugging
             function pDebug(...args) { if (isDebug) { console.log(`[ DEBUG ] '${protocol}' > ${path} `, ...args); } }
             function pError(...args) { if (isDebug) { console.error(`[ ERROR ] '${protocol}' > ${path} `, ...args); } }
+        }
+
+        function autoConnect() {
+
+            setTimeout(function () {
+
+                globalScope.wsUser = CreateWsUser();
+
+            }, 200);
+        }
+        function waitForReadyState(state, cb) {
+
+            if (document.readyState == state)
+                setTimeout(cb, 50);
+            else
+                setTimeout(waitForReadyState, 0, state, cb);
         }
     });
 
