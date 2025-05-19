@@ -48,6 +48,7 @@
             onclick.obj = { '/': 1 };
 
             wsUser = createWebSocket('ws-user', url);
+            document.documentElement.wsLink = wsUser;
 
             return wsUser;
 
@@ -121,7 +122,7 @@
                     if (!CreateLink.link_map[path].initDataContext) {
 
                         element.datacontext = CreateLink.link_map[path].datacontext;
-                        CreateLink.link_map[path].bindAllElements(element);
+                        DB.bindAllElements(element, false, true);
                     }
                 }
 
@@ -156,17 +157,13 @@
                     if (wsLink.initDataContext) {
 
                         delete wsLink.initDataContext;
-                        wsLink.datacontext = DC.parse(event.data, DC);
-                        wsLink.datacontext.resetChanges();
                         wsLink.datacontext.on('-change', onchange);
 
                         wsLink.elements.forEach(function (elem) {
 
                             elem.datacontext = wsLink.datacontext;
-                            wsLink.bindAllElements(elem);
+                            DB.bindAllElements(elem, false, true);
                         });
-
-                        return;
                     }
 
                     wsLink.datacontext.overwritingData(event.data);
