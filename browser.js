@@ -322,7 +322,7 @@
 
                     if (root_datacontext?.user?.isLogged && ws?.protocol === "ws-user") {
 
-                        self.onuserinfo({ userinfo: { message: 'Connection restored.', alerttype: 'alert-success' } });
+                        self.onuserinfo?.({ userinfo: { message: 'Connection restored.', alerttype: 'alert-success' } });
                     }
                     else { autoLogin(); }
 
