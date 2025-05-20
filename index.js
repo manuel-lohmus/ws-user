@@ -22,6 +22,7 @@ Object.defineProperties(CreateWsUser, {
     CLOSING: { value: 2, writable: false, enumerable: false, configurable: false },
     CLOSED: { value: 3, writable: false, enumerable: false, configurable: false },
     PAUSE: { value: 4, writable: false, enumerable: false, configurable: false },
+    addUser: { value: addUser, writable: false, enumerable: false, configurable: false },
 });
 
 //*** nodemailer ***
@@ -148,6 +149,18 @@ function CreateWsUser({
 
     if (!ws) { return null; }
 
+    loggedUsers.on('-change', (event) => {
+
+        console.log('loggedUsers -change', event);
+        if (!loggedUsers[email] && readyState === 1 && roles.length) {
+
+            console.log('loggedUsers -change', email, 'not found');
+            sendUserinfo({ isLogged: false });
+        }
+
+        return Boolean(self);
+    });
+
     return Object.defineProperties(self, {
         // Public properties
         readyState: {
@@ -231,8 +244,10 @@ function CreateWsUser({
         if (isWsUser && loggedUsers[email]?.connIDs.includes(connID)) {
 
             sendUserinfo({ isLogged: true, user: loggedUsers[email] });
-            if (sendedData.startsWith('$userinfo')) { sendedData = null; }
         }
+        else { sendUserinfo({ isLogged: false }); }
+
+        if (sendedData.startsWith('$userinfo')) { sendedData = null; }
 
         if (sendedData) { sendData(sendedData); }
         self.onopen && self.onopen.call(self);
@@ -647,22 +662,6 @@ function CreateWsUser({
 
 
             function done() { messageHandled(); }
-            function calcFilePath(filePath) {
-
-                return path.resolve(path.parse(process.argv[1]).dir.split("node_modules").shift(), filePath);
-            }
-            function calcUserDataFilePath(userEmail) {
-
-                return calcFilePath(path.join(userConfigSets.pathToUsersDir, userEmail, userEmail + '.json'));
-            }
-            function findUserDataFilePath(userEmail) {
-
-                var filePath = calcUserDataFilePath(userEmail);
-
-                if (!fs.existsSync(filePath)) { return; }
-
-                return filePath;
-            }
             function getUserDataFilePath(userEmail) {
 
                 var filePath = findUserDataFilePath(userEmail);
@@ -835,37 +834,6 @@ function CreateWsUser({
             resetPassword: Boolean(user.resetPassword)
         }));
     }
-    function encryptPassword(password) {
-
-        return sha512('us' + password);
-
-        function sha512(data) { return crypto.createHash("sha512").update(data, "binary").digest("hex"); }
-    }
-    function unmasking(str, key) {
-
-        str = Buffer.from(str, 'base64');
-        key = Buffer.from(key.substring(0, 4), 'utf-8');
-
-        for (var i = 0, n = str.length; i < n; i++) {
-
-            str[i] = str[i] ^ key[i & 3];
-        }
-
-        return str.toString('utf8');
-    }
-    function generateSecurityCode() {
-
-        function getRandomInt(max) { return Math.floor(Math.random() * Math.floor(max)); }
-
-        var key = Array.from("0123456789");
-        var code = '';
-
-        while (code.length < 7) {
-            code += key.splice(getRandomInt(key.length - 1), 1).join('');
-        }
-        return code;
-
-    }
 
     // Debugging
     function pDebug(...args) { if (userConfigSets.isDebug) { console.log(`[ DEBUG ] 'ws-user' protocol:`, protocol, ...args); } }
@@ -874,6 +842,102 @@ function CreateWsUser({
 
 
 //*** Helpers ***/
+function encryptPassword(password) {
+
+    return sha512('us' + password);
+
+    function sha512(data) { return crypto.createHash("sha512").update(data, "binary").digest("hex"); }
+}
+function unmasking(str, key) {
+
+    str = Buffer.from(str, 'base64');
+    key = Buffer.from(key.substring(0, 4), 'utf-8');
+
+    for (var i = 0, n = str.length; i < n; i++) {
+
+        str[i] = str[i] ^ key[i & 3];
+    }
+
+    return str.toString('utf8');
+}
+function generateSecurityCode() {
+
+    function getRandomInt(max) { return Math.floor(Math.random() * Math.floor(max)); }
+
+    var key = Array.from("0123456789");
+    var code = '';
+
+    while (code.length < 7) {
+        code += key.splice(getRandomInt(key.length - 1), 1).join('');
+    }
+    return code;
+
+}
+function calcFilePath(filePath) {
+
+    return path.resolve(path.parse(process.argv[1]).dir.split("node_modules").shift(), filePath);
+}
+function calcUserDataFilePath(userEmail) {
+
+    return calcFilePath(path.join(userConfigSets.pathToUsersDir, userEmail, userEmail + '.json'));
+}
+function findUserDataFilePath(userEmail) {
+
+    var filePath = calcUserDataFilePath(userEmail);
+
+    if (!fs.existsSync(filePath)) { return; }
+
+    return filePath;
+}
+function addUser(email, password, username) {
+
+    if (!validEmail(email)) { return `Error: Email not validated.`; }
+    if (!password) { return `Error: Password not validated.`; }
+    if (password.length < 6) { return `Error: Password too short.`; }
+
+    var filePath = findUserDataFilePath(email);
+
+    if (filePath) { return `Error: Email in use.`; }
+
+    if (!username) {
+
+        // If username is not provided, use the part before the '@' in the email address
+        username = email.split('@')[0];
+        // Replace all '.' with ' ' in username
+        username = username.replace(/\./g, ' ');
+        // Remove all special characters from username
+        username = username.trim().replace(/[^a-zA-Z0-9_]/g, '');
+        // Capitalize the first letters
+        username = username.replace(/^\w/, function (c) { return c.toUpperCase(); });
+    }
+
+    password = encryptPassword(password);
+
+    var user = {
+        email,
+        password,
+        name: username,
+        organizations: [],
+        roles: ['user'],
+        //securityCode: generateSecurityCode()
+    };
+
+    // Create user directory if it doesn't exist
+    filePath = calcUserDataFilePath(email);
+
+    if (!fs.existsSync(path.parse(filePath).dir)) {
+
+        fs.mkdirSync(
+            path.parse(filePath).dir,
+            { recursive: true }
+        );
+    }
+
+    // Write user data to file
+    fs.writeFileSync(filePath, DataContext.stringify(user, null, 2), { encoding: 'utf8' });
+
+    return 'User created successfully.';
+}
 function validEmail(mail) { return /^(([^<>()\[\]\.,;:\s@\"]+(\.[^<>()\[\]\.,;:\s@\"]+)*)|(\".+\"))@(([^<>()\.,;\s@\"]+\.{0,1})+([^<>()\.,;:\s@\"]{2,}|[\d\.]+))$/.test(mail); }
 function htmlEncode(input) {
 

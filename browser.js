@@ -45,7 +45,8 @@
             globalScope.onerror = onerror;
             globalScope.onbeforeunload = onbeforeunload;
             globalScope.onclick = onclick;
-            onclick.obj = { '/': 1 };
+            onclick.obj = {};
+            onclick.obj[location.href.replace(location.origin, '')] = 1;
 
             wsUser = createWebSocket('ws-user', url);
             document.documentElement.wsLink = wsUser;
@@ -634,9 +635,19 @@
                 if (root_datacontext.user.roles?.includes('user') && globalScope.UFE?.navigationLinksContainerSelector) {
 
                     var contentDiv = document.querySelector(globalScope.UFE.navigationLinksContainerSelector);
+                    if (!userinfo.navigationLinksOriginalHTML) { userinfo.navigationLinksOriginalHTML = contentDiv.innerHTML; }
                     contentDiv.innerHTML = '';
                     contentDiv.setAttribute('template', CreateWsUser.navigationLinksTemplate);
-                    DB.bindAllElements(contentDiv);
+                    DB.bindAllElements(contentDiv, true);
+                    setTimeout(function () { globalScope.UFE?.setMenuItemActive(location.hash); });
+                }
+                else if (globalScope.UFE?.navigationLinksContainerSelector) {
+
+                    var contentDiv = document.querySelector(globalScope.UFE.navigationLinksContainerSelector);
+                    if (userinfo.navigationLinksOriginalHTML) { contentDiv.innerHTML = userinfo.navigationLinksOriginalHTML; }
+                    contentDiv.removeAttribute('template');
+                    DB.bindAllElements(contentDiv, true);
+                    setTimeout(function () { globalScope.UFE?.setMenuItemActive(location.hash); });
                 }
 
                 if (self.onuserinfo) {
