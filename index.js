@@ -151,10 +151,8 @@ function CreateWsUser({
 
     loggedUsers.on('-change', (event) => {
 
-        console.log('loggedUsers -change', event);
         if (!loggedUsers[email] && readyState === 1 && roles.length) {
 
-            console.log('loggedUsers -change', email, 'not found');
             sendUserinfo({ isLogged: false });
         }
 
@@ -245,9 +243,9 @@ function CreateWsUser({
 
             sendUserinfo({ isLogged: true, user: loggedUsers[email] });
         }
-        else { sendUserinfo({ isLogged: false }); }
+        else if (isWsUser) { sendUserinfo({ isLogged: false }); }
 
-        if (sendedData.startsWith('$userinfo')) { sendedData = null; }
+        if (sendedData?.startsWith('$userinfo')) { sendedData = null; }
 
         if (sendedData) { sendData(sendedData); }
         self.onopen && self.onopen.call(self);

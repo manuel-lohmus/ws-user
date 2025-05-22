@@ -604,7 +604,7 @@
             function userinfo(msg, done) {
 
                 if (!root_datacontext.user) { root_datacontext.user = {}; }
-                DC.syncData(root_datacontext.user, JSON.parse(msg));
+                if (msg) { DC.syncData(root_datacontext.user, JSON.parse(msg)); }
                 userEmail = root_datacontext.user.email;
 
                 if (!root_datacontext.user.isLogged && globalScope.UFE) { globalScope.UFE.renderIndexContent(); }
@@ -655,7 +655,7 @@
                     self.onuserinfo({ user: root_datacontext.user });
                 }
 
-                done();
+                done?.();
             }
 
             // Debugging
