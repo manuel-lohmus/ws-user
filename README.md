@@ -1,11 +1,18 @@
+<div class="row w-100">
+<div class="col-12 text-center">
 
+# WS-User  
+User authentication and authorization for WebSocket applications.<br>
+This manual is also available in [HTML5](https://manuel-lohmus.github.io/ws-user/README.html).
+
+</div>
+</div> 
 <div class="row w-100">
 <div class="col-lg-3 d-lg-inline">
 <div class="sticky-top overflow-auto vh-lg-100">
 <div id="list-headers" class="list-group mt-2 ms-lg-2 ms-4">
 
 #### Table of contents
-- [**WS-User**](#ws-user)
 - [**Overview**](#overview)
 - [**Features**](#features)
 - [**Installation**](#installation)
@@ -20,16 +27,16 @@
 <div class="col-lg-9 mt-2">
 <div class="ps-4 markdown-body" data-bs-spy="scroll" data-bs-target="#list-headers" data-bs-offset="0" tabindex="0">
 
-# WS-User  
-This manual is also available in [HTML5](https://manuel-lohmus.github.io/ws-user/README.html).
-
 ## Overview  
-WS-User module is a library that manages user data over the websocket protocol.<br>
+WS-User module is a library that manages user data over the websocket protocol.
 Used when building a **single-page application** (**SPA**), this library offers a modern approach.<br>
 Now using the specially designed module [`ws13`](https://www.npmjs.com/package/ws13) to get a better and more stable connection.  
 It frontends and backends for user data management libraries.  
 `browser.js` is a frontend library that provides a user interface for managing user data.  
-`server.js` is a backend library that provides managing user data over the websocket protocol in real-time.  
+`index.js` is a backend library that provides managing user data over the websocket protocol in real-time. 
+This module is part of the ['conextra'](https://www.npmjs.com/package/conextra) framework,
+which is a simple and easy-to-use single-page application (SPA) framework.
+You have to try it! A different solution than MVC (model–view–controller).
 
 ## Features  
 - Create new user 

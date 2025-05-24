@@ -1,7 +1,7 @@
 ﻿<!DOCTYPE html>
 <html>
 <head>
-    <title>Table of contents</title>
+    <title>WS-User</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/css/bootstrap.min.css" />
     <script crossorigin="anonymous" src="https://cdn.jsdelivr.net/npm/bootstrap@5/dist/js/bootstrap.bundle.min.js"></script>
@@ -30,12 +30,18 @@
 </head>
 <body>
     <div class="row w-100">
+<div class="col-12 text-center">
+<h1 id="ws-user">WS-User</h1>
+<p>User authentication and authorization for WebSocket applications.<br>
+This manual is also available in <a href="https://manuel-lohmus.github.io/ws-user/README.html">HTML5</a>.</p>
+</div>
+</div> 
+<div class="row w-100">
 <div class="col-lg-3 d-lg-inline">
 <div class="sticky-top overflow-auto vh-lg-100">
 <div id="list-headers" class="list-group mt-2 ms-lg-2 ms-4">
 <h4 id="table-of-contents">Table of contents</h4>
 <ul>
-<li><a href="#ws-user"><strong>WS-User</strong></a></li>
 <li><a href="#overview"><strong>Overview</strong></a></li>
 <li><a href="#features"><strong>Features</strong></a></li>
 <li><a href="#installation"><strong>Installation</strong></a></li>
@@ -49,15 +55,16 @@
  
 <div class="col-lg-9 mt-2">
 <div class="ps-4 markdown-body" data-bs-spy="scroll" data-bs-target="#list-headers" data-bs-offset="0" tabindex="0">
-<h1 id="ws-user">WS-User</h1>
-<p>This manual is also available in <a href="https://manuel-lohmus.github.io/ws-user/README.html">HTML5</a>.</p>
 <h2 id="overview">Overview</h2>
-<p>WS-User module is a library that manages user data over the websocket protocol.<br>
+<p>WS-User module is a library that manages user data over the websocket protocol.
 Used when building a <strong>single-page application</strong> (<strong>SPA</strong>), this library offers a modern approach.<br>
 Now using the specially designed module <a href="https://www.npmjs.com/package/ws13"><code>ws13</code></a> to get a better and more stable connection.<br />
 It frontends and backends for user data management libraries.<br />
 <code>browser.js</code> is a frontend library that provides a user interface for managing user data.<br />
-<code>server.js</code> is a backend library that provides managing user data over the websocket protocol in real-time.</p>
+<code>index.js</code> is a backend library that provides managing user data over the websocket protocol in real-time.
+This module is part of the <a href="https://www.npmjs.com/package/conextra">'conextra'</a> framework,
+which is a simple and easy-to-use single-page application (SPA) framework.
+You have to try it! A different solution than MVC (model–view–controller).</p>
 <h2 id="features">Features</h2>
 <ul>
 <li>Create new user</li>

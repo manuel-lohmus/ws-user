@@ -904,7 +904,7 @@ function addUser(email, password, username) {
         // Replace all '.' with ' ' in username
         username = username.replace(/\./g, ' ');
         // Remove all special characters from username
-        username = username.trim().replace(/[^a-zA-Z0-9_]/g, '');
+        username = username.trim().replace(/[^a-zA-Z0-9_\s]/g, '');
         // Capitalize the first letters
         username = username.replace(/^\w/, function (c) { return c.toUpperCase(); });
     }
