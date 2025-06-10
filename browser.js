@@ -26,7 +26,6 @@
             PAUSE: { value: 4, writable: false, enumerable: false, configurable: false },
             CreateLink: { value: CreateLink, writable: false, enumerable: false, configurable: false },
             wsUserURL: { value: (location.protocol == 'http:' ? 'ws://' : 'wss://') + location.hostname + ':' + ((location.port || location.protocol == 'http:' && 80 || 443) + 1), writable: true, enumerable: false, configurable: false },
-            navigationLinksTemplate: { value: 'templates/navigation-links-user.html', writable: true, enumerable: false, configurable: false },
             confirmMailModalTemplate: { value: 'templates/confirm-mail-modal.html', writable: true, enumerable: false, configurable: false },
             confirmMailTemplate: { value: 'templates/confirm-mail.html', writable: true, enumerable: false, configurable: false },
             resetPasswordModalTemplate: { value: 'templates/reset-password-modal.html', writable: true, enumerable: false, configurable: false },
@@ -604,10 +603,15 @@
             function userinfo(msg, done) {
 
                 if (!root_datacontext.user) { root_datacontext.user = {}; }
-                if (msg) { DC.syncData(root_datacontext.user, JSON.parse(msg)); }
+                if (msg) {
+
+                    msg = JSON.parse(msg);
+                    window.dispatchEvent(new CustomEvent('ws-user', { detail: { eventName: 'user-info', ...msg } }));
+                    DC.syncData(root_datacontext.user, msg);
+                }
                 userEmail = root_datacontext.user.email;
 
-                if (!root_datacontext.user.isLogged && globalScope.UFE) { globalScope.UFE.renderIndexContent(); }
+                if (!root_datacontext.user.isLogged && globalScope.UFE) { setTimeout(globalScope.UFE.renderIndexContent, 2000); }
 
                 if (root_datacontext.user.message && globalScope.UFE) {
 
@@ -630,24 +634,6 @@
                 else if (root_datacontext.user.resetPassword && globalScope.UFE && CreateWsUser.resetPasswordTemplate) {
 
                     globalScope.UFE.renderContent(CreateWsUser.resetPasswordTemplate);
-                }
-
-                if (root_datacontext.user.roles?.includes('user') && globalScope.UFE?.navigationLinksContainerSelector) {
-
-                    var contentDiv = document.querySelector(globalScope.UFE.navigationLinksContainerSelector);
-                    if (!userinfo.navigationLinksOriginalHTML) { userinfo.navigationLinksOriginalHTML = contentDiv.innerHTML; }
-                    contentDiv.innerHTML = '';
-                    contentDiv.setAttribute('template', CreateWsUser.navigationLinksTemplate);
-                    DB.bindAllElements(contentDiv, true);
-                    setTimeout(function () { globalScope.UFE?.setMenuItemActive(location.hash); });
-                }
-                else if (globalScope.UFE?.navigationLinksContainerSelector) {
-
-                    var contentDiv = document.querySelector(globalScope.UFE.navigationLinksContainerSelector);
-                    if (userinfo.navigationLinksOriginalHTML) { contentDiv.innerHTML = userinfo.navigationLinksOriginalHTML; }
-                    contentDiv.removeAttribute('template');
-                    DB.bindAllElements(contentDiv, true);
-                    setTimeout(function () { globalScope.UFE?.setMenuItemActive(location.hash); });
                 }
 
                 if (self.onuserinfo) {
