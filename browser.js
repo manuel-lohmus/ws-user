@@ -7,7 +7,8 @@
     exportModule('ws-user', ["data-context", 'data-context-binding'], function factory(DC, DB) {
 
         var globalScope = this,
-            isDebug = document && Array.from(document.scripts).find(function (s) { return s.src.includes('ws-user'); }).attributes.debug || false,
+            script = this.document && Array.from(document.scripts).find(function (s) { return s.src.includes('ws-user'); }),
+            isDebug = Boolean(script?.attributes.debug) || false,
             wsOrigin = '',
             wsUser = null,
             userEmail = '',

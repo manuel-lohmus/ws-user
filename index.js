@@ -12,7 +12,9 @@ var path = require('path'),
         pathToFrontendErrorFile: 'log/frontend_errors.log',
         pathToLogFile: '',
         pathToLoggedUsers: 'logged_users.json',
-        pathToUsersDir: 'users'
+        pathToUsersDir: 'users',
+        fileSecurityCodeText: "./public/www/templates/.security-code.txt",
+        fileSecurityCodeHtml: "./public/www/templates/.security-code.html"
     }),
     loggedUsers = DataContext.watchJsonFile({ filePath: userConfigSets.pathToLoggedUsers });
 
@@ -761,10 +763,8 @@ function CreateWsUser({
 
                 function sendSecurityCodeEmail(user, callback) {
 
-                    var fileText = "./public/www/templates/security-code.txt",
-                        fileHtml = "./public/www/templates/security-code.html",
-                        strText = fs.existsSync(fileText) ? fs.readFileSync(fileText).toString() : "",
-                        strHtml = fs.existsSync(fileHtml) ? fs.readFileSync(fileHtml).toString() : "",
+                    var strText = userConfigSets?.fileSecurityCodeText && fs.existsSync(userConfigSets.fileSecurityCodeText) ? fs.readFileSync(fileText).toString() : "",
+                        strHtml = userConfigSets?.fileSecurityCodeHtml && fs.existsSync(userConfigSets.fileSecurityCodeHtml) ? fs.readFileSync(fileHtml).toString() : "",
                         domain = nodemailerOptions.domain_account;
 
                     if (!domain || domain.includes('localhost')) {
