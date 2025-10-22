@@ -207,11 +207,7 @@ On the client side, you can use the following code to connect to the server:
 
 This project is licensed under the MIT License.  
 
-Copyright &copy; 2021 Manuel Lõhmus  
-
-[![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donate_SM.gif)](https://www.paypal.com/donate?hosted_button_id=GJHV8E2DBBFJU)  
-
-Donations are welcome and will go towards further development of this project.  
+Copyright &copy; 2021 Manuel Lõhmus   
 
 <br>  
 <br>  

@@ -147,7 +147,17 @@ function CreateWsUser({
         sendedData = null,
         ws = createWebSocket(),
         location = origin || headers?.origin || request?.headers?.origin,
-        self = Object.create(null);
+        self = Object.create(null), wsCommandMap = {
+            log,
+            log_error,
+            login,
+            logout,
+            create_account,
+            update_name,
+            update_password,
+            security_code,
+            upload_file
+        };
 
     if (!ws) { return null; }
 
@@ -360,451 +370,353 @@ function CreateWsUser({
         }
         function execute(msgObj) {
 
-            var functionMap = {
-                log: function (msg) {
+            if (typeof wsCommandMap[msgObj.cmd] === 'function') {
 
-                    if (!msg || !userConfigSets.pathToLogFile) { return; }
-                    
-                    var text = `${new Date().toISOString()}|${ws?.ip || 'undefined'}`;
-                    while (text.length < 40) { text += ' '; }
-                    text += `${msg}\n`;
-                    var filePath = path.parse(userConfigSets.pathToLogFile);
-                    filePath.base = location.substring(location.indexOf('//') + 2) + ('-' + filePath.base || '.log');
-                    filePath = path.resolve(
-                        path.parse(process.argv[1]).dir.split("node_modules").shift(),
-                        filePath.dir,
-                        filePath.base
-                    );
-
-                    if (!fs.existsSync(path.parse(filePath).dir)) {
-
-                        fs.mkdirSync(
-                            path.parse(filePath).dir,
-                            { recursive: true }
-                        );
-                    }
-
-                    fs.appendFile(filePath, text, function (err) {
-
-                        if (err) { pError(err); }
-                    });
-
-                    done();
-                },
-                log_error: function (msg) {
-
-                    var text = `[${new Date().toISOString()}][ ERROR ]\t${msg}\n`;
-                    var filePath = path.resolve(path.parse(process.argv[1]).dir.split("node_modules").shift(), userConfigSets.pathToFrontendErrors);
-
-                    if (!fs.existsSync(path.parse(filePath).dir)) {
-
-                        fs.mkdirSync(
-                            path.parse(filePath).dir,
-                            { recursive: true }
-                        );
-                    }
-
-                    fs.appendFile(filePath, text, function (err) {
-
-                        if (err) { pError(err); }
-                    });
-
-                    pError('Frontend:', msg);
-                    done();
-                },
-                login: function (msg) {
-
-                    msg = unmasking(msg, connID);
-
-                    var oldEmail = email, [userEmail, password] = msg.split(':');
-
-                    var user = getUserDataFromFile(userEmail);
-
-                    if (!user) { return; }
-
-                    email = userEmail;
-
-                    if (user.password !== encryptPassword(password)) {
-
-                        sendUserinfo({
-                            isLogged: false,
-                            message: 'Wrong password.',
-                            alerttype: 'alert-warning',
-                            user: { email: userEmail, securityCode: user.securityCode }
-                        });
-                        done();
-
-                        return;
-                    }
-
-                    // Logout
-                    if (loggedUsers[oldEmail]?.connIDs.includes(connID)) {
-
-                        loggedUsers[oldEmail].connIDs = loggedUsers[oldEmail].connIDs.filter(c => c !== connID);
-                        organizations = [];
-                        roles = [];
-
-                        if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: false }); } 
-                    }
-
-                    if (!loggedUsers[oldEmail]?.connIDs.length) { delete loggedUsers[oldEmail]; }
-
-                    // Login
-                    if (!loggedUsers[userEmail]) {
-
-                        loggedUsers[userEmail] = {
-                            connIDs: [],
-                            email: user.email,
-                            name: user.name,
-                            organizations: user.organizations,
-                            roles: user.roles
-                        };
-                    }
-
-                    if (!loggedUsers[userEmail].connIDs.includes(connID)) { loggedUsers[userEmail].connIDs.push(connID); }
-
-                    organizations = user.organizations;
-                    roles = user.roles;
-
-                    sendUserinfo({ isLogged: true, message: 'You are logged in.', user });
-
-                    if (!user.ip_addresses) { user.ip_addresses = []; }
-
-                    if (!user.ip_addresses.includes(ws.ip)) {
-
-                        user.ip_addresses.push(ws.ip);
-                        saveUserDataToFile(user, function () { done(); });
-                    }
-
-                    if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: true }); } 
-
-                    done();
-                },
-                logout: function (msg) {
-
-                    var conn_id = msg;
-
-                    if (conn_id && loggedUsers[email]) {
-
-                        loggedUsers[email].connIDs = loggedUsers[email].connIDs.filter(c => c !== conn_id);
-                        sendUserinfo({ message: 'You are logged out.' });
-                    }
-                    else {
-
-                        delete loggedUsers[email];
-                        sendUserinfo({ message: 'You are logged out everywhere.' });
-                    }
-
-                    if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: false }); } 
-
-                    done();
-                },
-                create_account: function (msg) {
-
-                    msg = unmasking(msg, connID);
-
-                    var [userEmail, password, username] = msg.split(':'),
-                        filePath = findUserDataFilePath(userEmail);
-
-                    if (filePath) {
-
-                        sendUserinfo({
-                            isLogged: false,
-                            message: 'Email in use.',
-                            alerttype: 'alert-warning',
-                        });
-                        done();
-
-                        return;
-                    }
-
-                    email = userEmail;
-                    password = encryptPassword(password);
-
-                    self.create_account = {
-                        email: userEmail,
-                        password,
-                        name: username,
-                        organizations: [],
-                        roles: ['user']
-                    };
-
-                    sendSecurityCode(self.create_account, done);
-                },
-                update_name: function update_name(msg) {
-
-                    var [userEmail, username] = msg.split(':'),
-                        user = getUserDataFromFile(userEmail);
-
-                    if (!user) { return; }
-
-                    user.name = username;
-
-                    if (loggedUsers[userEmail]) { loggedUsers[userEmail].name = username; }
-
-                    saveUserDataToFile(user, function () {
-
-                        sendUserinfo({ isLogged: true, message: 'You name is updated.', user });
-                        done();
-                    });
-                },
-                update_password: function update_password(msg) {
-
-                    msg = unmasking(msg, connID);
-
-                    var [userEmail, password] = msg.split(':'),
-                        user = getUserDataFromFile(userEmail);
-
-                    if (!user) { return; }
-
-                    user.password = encryptPassword(password);
-
-                    saveUserDataToFile(user, function () {
-
-                        sendUserinfo({ isLogged: true, message: 'You password is updated.', user });
-                        done();
-                    });
-                },
-                security_code: function (msg) {
-
-                    msg = unmasking(msg, connID);
-
-                    var [userEmail, securityCode, resetPassword] = msg.split(':');
-
-                    // end create account
-                    if (securityCode && !resetPassword && self.create_account?.email === userEmail) {
-
-                        if (self.create_account.securityCode !== securityCode) {
-
-                            sendUserinfo({
-                                isLogged: false,
-                                message: `The security code does not match, try again. (${userEmail})`,
-                                alerttype: 'alert-warning',
-                                user: { email: userEmail }
-                            });
-
-                            delete self.create_account;
-
-                            if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: false }); } 
-
-                            done();
-
-                            return;
-
-                        }
-
-                        delete self.create_account.securityCode;
-
-                        saveUserDataToFile(self.create_account, function () {
-
-                            sendUserinfo({ isLogged: true, message: 'You are logged in.', user: self.create_account });
-
-                            delete self.create_account;
-
-                            if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: true }); } 
-
-                            done();
-                        });
-
-                        return;
-                    }
-
-                    var user = getUserDataFromFile(userEmail, done);
-
-                    if (!user) { return; }
-
-                    if (securityCode) {
-
-                        if (securityCode !== user.securityCode) {
-
-                            sendUserinfo({
-                                isLogged: false,
-                                message: `The security code does not match, try again. (${userEmail})`,
-                                alerttype: 'alert-warning',
-                                user: { email: userEmail }
-                            });
-
-                            return;
-                        }
-
-                        delete user.securityCode;
-                        user.resetPassword = true;
-                        sendUserinfo({ isLogged: true, message: 'You are logged in.', user });
-                        delete user.resetPassword;
-                        roles = user.roles;
-
-                        saveUserDataToFile(user, done);
-
-                        return;
-                    }
-
-                    sendSecurityCode(user, function () {
-
-                        saveUserDataToFile(user, done);
-                    });
-                }
-            }
-
-            if (typeof functionMap[msgObj.cmd] === 'function') {
-
-                return functionMap[msgObj.cmd](msgObj.rawBody);
+                return wsCommandMap[msgObj.cmd](msgObj.rawBody, messageHandled);
             }
 
             if (typeof self.extensionCommands[msgObj.cmd] === 'function') {
 
-                return self.extensionCommands[msgObj.cmd].call(self, { message: msgObj.rawBody, done });
+                return self.extensionCommands[msgObj.cmd].call(self, { message: msgObj.rawBody, messageHandled });
             }
 
             pDebug('Command not found >', msgObj.cmd);
+            messageHandled();
+
+            return;
+        }
+    }
+    function log(msg, done) {
+
+        if (!msg || !userConfigSets.pathToLogFile) { return; }
+
+        var text = `${new Date().toISOString()}|${ws?.ip || 'undefined'}`;
+        while (text.length < 40) { text += ' '; }
+        text += `${msg}\n`;
+        var filePath = path.parse(userConfigSets.pathToLogFile);
+        filePath.base = location.substring(location.indexOf('//') + 2) + ('-' + filePath.base || '.log');
+        filePath = path.resolve(
+            path.parse(process.argv[1]).dir.split("node_modules").shift(),
+            filePath.dir,
+            filePath.base
+        );
+
+        if (!fs.existsSync(path.parse(filePath).dir)) {
+
+            fs.mkdirSync(
+                path.parse(filePath).dir,
+                { recursive: true }
+            );
+        }
+
+        fs.appendFile(filePath, text, function (err) {
+
+            if (err) { pError(err); }
+        });
+
+        done();
+    }
+    function log_error(msg, done) {
+
+        var text = `[${new Date().toISOString()}][ ERROR ]\t${msg}\n`;
+        var filePath = path.resolve(path.parse(process.argv[1]).dir.split("node_modules").shift(), userConfigSets.pathToFrontendErrors);
+
+        if (!fs.existsSync(path.parse(filePath).dir)) {
+
+            fs.mkdirSync(
+                path.parse(filePath).dir,
+                { recursive: true }
+            );
+        }
+
+        fs.appendFile(filePath, text, function (err) {
+
+            if (err) { pError(err); }
+        });
+
+        pError('Frontend:', msg);
+        done();
+    }
+    function login(msg, done) {
+
+        msg = unmasking(msg, connID);
+
+        var oldEmail = email, [userEmail, password] = msg.split(':');
+
+        var user = getUserDataFromFile(userEmail);
+
+        if (!user) { return; }
+
+        email = userEmail;
+
+        if (user.password !== encryptPassword(password)) {
+
+            sendUserinfo({
+                isLogged: false,
+                message: 'Wrong password.',
+                alerttype: 'alert-warning',
+                user: { email: userEmail, securityCode: user.securityCode }
+            });
             done();
 
             return;
+        }
 
+        // Logout
+        if (loggedUsers[oldEmail]?.connIDs.includes(connID)) {
 
-            function done() { messageHandled(); }
-            function getUserDataFilePath(userEmail) {
+            loggedUsers[oldEmail].connIDs = loggedUsers[oldEmail].connIDs.filter(c => c !== connID);
+            organizations = [];
+            roles = [];
 
-                var filePath = findUserDataFilePath(userEmail);
+            if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: false }); }
+        }
 
-                if (!filePath) {
+        if (!loggedUsers[oldEmail]?.connIDs.length) { delete loggedUsers[oldEmail]; }
 
-                    sendUserinfo({
-                        isLogged: false,
-                        message: `User does not exist. (${userEmail})`,
-                        alerttype: 'alert-warning',
-                        user: { email: userEmail }
-                    });
-                    done();
+        // Login
+        if (!loggedUsers[userEmail]) {
 
-                    return;
-                }
+            loggedUsers[userEmail] = {
+                connIDs: [],
+                email: user.email,
+                name: user.name,
+                organizations: user.organizations,
+                roles: user.roles
+            };
+        }
 
-                return filePath;
-            }
-            function getUserDataFromFile(userEmail) {
+        if (!loggedUsers[userEmail].connIDs.includes(connID)) { loggedUsers[userEmail].connIDs.push(connID); }
 
-                if (!validEmail(userEmail)) {
+        organizations = user.organizations;
+        roles = user.roles;
 
-                    sendUserinfo({
-                        isLogged: false,
-                        message: 'User email not validated.',
-                        alerttype: 'alert-warning',
-                    });
-                    done();
+        sendUserinfo({ isLogged: true, message: 'You are logged in.', user });
 
-                    return;
-                }
+        if (!user.ip_addresses) { user.ip_addresses = []; }
 
-                var filePath = getUserDataFilePath(userEmail, done);
+        if (!user.ip_addresses.includes(ws.ip)) {
 
-                if (!filePath) { return; }
+            user.ip_addresses.push(ws.ip);
+            saveUserDataToFile(user, function () { done(); });
+        }
 
-                return DataContext.parse(fs.readFileSync(filePath, { encoding: 'utf8' }), DataContext);
+        if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: true }); }
 
-            }
-            function saveUserDataToFile(user, cb_ok) {
+        done();
+    }
+    function logout(msg, done) {
 
-                var filePath = calcUserDataFilePath(user.email);
+        var conn_id = msg;
 
-                if (!filePath) { return; }
+        if (conn_id && loggedUsers[email]) {
 
-                if (!fs.existsSync(path.parse(filePath).dir)) {
+            loggedUsers[email].connIDs = loggedUsers[email].connIDs.filter(c => c !== conn_id);
+            sendUserinfo({ message: 'You are logged out.' });
+        }
+        else {
 
-                    fs.mkdirSync(
-                        path.parse(filePath).dir,
-                        { recursive: true }
-                    );
-                }
+            delete loggedUsers[email];
+            sendUserinfo({ message: 'You are logged out everywhere.' });
+        }
 
-                fs.writeFile(
-                    filePath,
-                    DataContext.stringify(user, null, 2),
-                    { encoding: 'utf8' },
-                    (err) => {
+        if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: false }); }
 
-                        if (err) throw err;
-                        if (typeof cb_ok === 'function') { cb_ok(); }
-                    }
-                );
-            }
-            function sendSecurityCode(user, cb_ok) {
+        done();
+    }
+    function create_account(msg, done) {
 
-                user.securityCode = generateSecurityCode();
+        msg = unmasking(msg, connID);
 
-                sendSecurityCodeEmail(user, function (err) {
+        var [userEmail, password, username] = msg.split(':'),
+            filePath = findUserDataFilePath(userEmail);
 
-                    if (err) {
+        if (filePath) {
 
-                        if (userConfigSets.isDebug) {
+            sendUserinfo({
+                isLogged: false,
+                message: 'Email in use.',
+                alerttype: 'alert-warning',
+            });
+            done();
 
-                            pDebug(user.email, 'securityCode', user.securityCode);
-                        }
+            return;
+        }
 
-                        else {
+        email = userEmail;
+        password = encryptPassword(password);
 
-                            delete user.securityCode;
-                            sendUserinfo({ isLogged: false, message: 'Sending email failed.', alerttype: 'alert-warning' });
-                            done();
+        self.create_account = {
+            email: userEmail,
+            password,
+            name: username,
+            organizations: [],
+            roles: ['user']
+        };
 
-                            return;
-                        }
-                    }
+        sendSecurityCode(self.create_account, done);
+    }
+    function update_name(msg, done) {
 
-                    sendUserinfo({
-                        isLogged: false,
-                        message: 'Please check your email for the security code.',
-                        alerttype: 'alert-info',
-                        user: { securityCode: true, email: user.email }
-                    });
+        var [userEmail, username] = msg.split(':'),
+            user = getUserDataFromFile(userEmail);
 
-                    if (typeof cb_ok === 'function') { cb_ok(); }
+        if (!user) { return; }
+
+        user.name = username;
+
+        if (loggedUsers[userEmail]) { loggedUsers[userEmail].name = username; }
+
+        saveUserDataToFile(user, function () {
+
+            sendUserinfo({ isLogged: true, message: 'You name is updated.', user });
+            done();
+        });
+    }
+    function update_password(msg, done) {
+
+        msg = unmasking(msg, connID);
+
+        var [userEmail, password] = msg.split(':'),
+            user = getUserDataFromFile(userEmail);
+
+        if (!user) { return; }
+
+        user.password = encryptPassword(password);
+
+        saveUserDataToFile(user, function () {
+
+            sendUserinfo({ isLogged: true, message: 'You password is updated.', user });
+            done();
+        });
+    }
+    function security_code(msg, done) {
+
+        msg = unmasking(msg, connID);
+
+        var [userEmail, securityCode, resetPassword] = msg.split(':');
+
+        // end create account
+        if (securityCode && !resetPassword && self.create_account?.email === userEmail) {
+
+            if (self.create_account.securityCode !== securityCode) {
+
+                sendUserinfo({
+                    isLogged: false,
+                    message: `The security code does not match, try again. (${userEmail})`,
+                    alerttype: 'alert-warning',
+                    user: { email: userEmail }
                 });
 
+                delete self.create_account;
 
-                function sendSecurityCodeEmail(user, callback) {
+                if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: false }); }
 
-                    var strText = userConfigSets?.fileSecurityCodeText && fs.existsSync(userConfigSets.fileSecurityCodeText) ? fs.readFileSync(fileText).toString() : "",
-                        strHtml = userConfigSets?.fileSecurityCodeHtml && fs.existsSync(userConfigSets.fileSecurityCodeHtml) ? fs.readFileSync(fileHtml).toString() : "",
-                        domain = nodemailerOptions.domain_account;
+                done();
 
-                    if (!domain || domain.includes('localhost')) {
+                return;
 
-                        domain = require('node:os').hostname();
-                    }
-
-                    var data = {
-                        domain: domain.replace(/^\w/, function (c) { return c.toUpperCase(); }),
-                        email: maskEmail(user.email),
-                        securitycode: user.securityCode
-                    };
-
-                    Object.keys(data).forEach(function (key) {
-                        strText = strText.split('[' + key + ']').join(data[key]);
-                        strHtml = strHtml.split('[' + key + ']').join(htmlEncode(data[key]));
-                    });
-
-                    sendMail({
-                        from: nodemailerOptions.auth.user, // sender address
-                        to: user.email,// + ", conextra.ee@outlook.com", // list of receivers
-                        subject: domain + " account security code", // Subject line
-                        text: strText, // plain text body
-                        html: strHtml, // html body
-                    },
-                        callback
-                    );
-
-
-                    function maskEmail(email) {
-
-                        email = (email + '').split('@');
-                        email[0] = email[0].length > 3
-                            ? email[0].substr(0, 2) + '**********'
-                            : email[0].substr(0, 1) + '**********';
-
-                        return email.join('@');
-                    }
-                }
             }
+
+            delete self.create_account.securityCode;
+
+            saveUserDataToFile(self.create_account, function () {
+
+                sendUserinfo({ isLogged: true, message: 'You are logged in.', user: self.create_account });
+
+                delete self.create_account;
+
+                if (typeof self.onloggedin === 'function') { self.onloggedin.call(self, { isLoggedIn: true }); }
+
+                done();
+            });
+
+            return;
+        }
+
+        var user = getUserDataFromFile(userEmail, done);
+
+        if (!user) { return; }
+
+        if (securityCode) {
+
+            if (securityCode !== user.securityCode) {
+
+                sendUserinfo({
+                    isLogged: false,
+                    message: `The security code does not match, try again. (${userEmail})`,
+                    alerttype: 'alert-warning',
+                    user: { email: userEmail }
+                });
+
+                return;
+            }
+
+            delete user.securityCode;
+            user.resetPassword = true;
+            sendUserinfo({ isLogged: true, message: 'You are logged in.', user });
+            delete user.resetPassword;
+            roles = user.roles;
+
+            saveUserDataToFile(user, done);
+
+            return;
+        }
+
+        sendSecurityCode(user, function () {
+
+            saveUserDataToFile(user, done);
+        });
+    }
+    function upload_file(msg, done) {
+
+        if (!msg || !msg.includes(':')) { return done(); }
+        if (!email || !validEmail(email)) { return done(); }
+
+        var msgParts = msg.split(':'),
+            fileName = msgParts.shift(),
+            fileContent = msgParts.join(':'),
+            isBase64 = fileContent.startsWith('data:') && fileContent.includes(';base64,'),
+            filePath = path.join(calcUserDataDir(email), fileName);
+
+        fileContent = fileContent.split(',')[1] || fileContent;
+
+        if (isBase64) {
+
+            fileContent = Buffer.from(fileContent, 'base64');
+        }
+
+        if (filePath) {
+            fs.writeFile(filePath, fileContent, { encoding: isBase64 ? null : 'utf8' }, function (err) {
+
+                if (err) {
+                    pError('File upload error:', err);
+                    sendData('$upload_file:false:File upload failed.');
+                    sendUserinfo({
+                        message: 'File upload failed.',
+                        alerttype: 'alert-warning'
+                    });
+                }
+                else {
+                    sendData('$upload_file:true:File uploaded successfully.');
+                    sendUserinfo({
+                        message: `File uploaded successfully.`
+                    });
+                }
+
+                return done();
+            });
+        }
+        else {
+
+            pError('File path not found for user:', email);
+            sendUserinfo({
+                isLogged: false,
+                message: 'File upload failed. User data file path not found.',
+                alerttype: 'alert-warning'
+            });
+
+            return done();
         }
     }
     /**
@@ -818,7 +730,12 @@ function CreateWsUser({
      * @returns {void}
      * 
      */
-    function sendUserinfo({ isLogged = false, message = '', alerttype = 'alert-success', user = {} } = {}) {
+    function sendUserinfo({ isLogged, message = '', alerttype = 'alert-success', user } = {}) {
+
+        if (!isWsUser) { return pError('sendUserinfo() called on non-ws-user connection!'); }
+        if (isLogged === undefined) { isLogged = sendUserinfo.isLogged || false; }
+        else { sendUserinfo.isLogged = isLogged; }
+        if (!user) { user = loggedUsers[email] || {}; }
 
         sendData('$userinfo:' + JSON.stringify({
             isLogged,
@@ -831,6 +748,150 @@ function CreateWsUser({
             securityCode: Boolean(user.securityCode),
             resetPassword: Boolean(user.resetPassword)
         }));
+    }
+
+    function getUserDataFilePath(userEmail) {
+
+        var filePath = findUserDataFilePath(userEmail);
+
+        if (!filePath) {
+
+            sendUserinfo({
+                isLogged: false,
+                message: `User does not exist. (${userEmail})`,
+                alerttype: 'alert-warning',
+                user: { email: userEmail }
+            });
+            messageHandled();
+
+            return;
+        }
+
+        return filePath;
+    }
+    function getUserDataFromFile(userEmail) {
+
+        if (!validEmail(userEmail)) {
+
+            sendUserinfo({
+                isLogged: false,
+                message: 'User email not validated.',
+                alerttype: 'alert-warning',
+            });
+            messageHandled();
+
+            return;
+        }
+
+        var filePath = getUserDataFilePath(userEmail, messageHandled);
+
+        if (!filePath) { return; }
+
+        return DataContext.parse(fs.readFileSync(filePath, { encoding: 'utf8' }), DataContext);
+
+    }
+    function saveUserDataToFile(user, cb_ok) {
+
+        var filePath = calcUserDataFilePath(user.email);
+
+        if (!filePath) { return; }
+
+        if (!fs.existsSync(path.parse(filePath).dir)) {
+
+            fs.mkdirSync(
+                path.parse(filePath).dir,
+                { recursive: true }
+            );
+        }
+
+        fs.writeFile(
+            filePath,
+            DataContext.stringify(user, null, 2),
+            { encoding: 'utf8' },
+            (err) => {
+
+                if (err) throw err;
+                if (typeof cb_ok === 'function') { cb_ok(); }
+            }
+        );
+    }
+    function sendSecurityCode(user, cb_ok) {
+
+        user.securityCode = generateSecurityCode();
+
+        sendSecurityCodeEmail(user, function (err) {
+
+            if (err) {
+
+                if (userConfigSets.isDebug) {
+
+                    pDebug(user.email, 'securityCode', user.securityCode);
+                }
+
+                else {
+
+                    delete user.securityCode;
+                    sendUserinfo({ isLogged: false, message: 'Sending email failed.', alerttype: 'alert-warning' });
+                    messageHandled();
+
+                    return;
+                }
+            }
+
+            sendUserinfo({
+                isLogged: false,
+                message: 'Please check your email for the security code.',
+                alerttype: 'alert-info',
+                user: { securityCode: true, email: user.email }
+            });
+
+            if (typeof cb_ok === 'function') { cb_ok(); }
+        });
+
+
+        function sendSecurityCodeEmail(user, callback) {
+
+            var strText = userConfigSets?.fileSecurityCodeText && fs.existsSync(userConfigSets.fileSecurityCodeText) ? fs.readFileSync(fileText).toString() : "",
+                strHtml = userConfigSets?.fileSecurityCodeHtml && fs.existsSync(userConfigSets.fileSecurityCodeHtml) ? fs.readFileSync(fileHtml).toString() : "",
+                domain = nodemailerOptions.domain_account;
+
+            if (!domain || domain.includes('localhost')) {
+
+                domain = require('node:os').hostname();
+            }
+
+            var data = {
+                domain: domain.replace(/^\w/, function (c) { return c.toUpperCase(); }),
+                email: maskEmail(user.email),
+                securitycode: user.securityCode
+            };
+
+            Object.keys(data).forEach(function (key) {
+                strText = strText.split('[' + key + ']').join(data[key]);
+                strHtml = strHtml.split('[' + key + ']').join(htmlEncode(data[key]));
+            });
+
+            sendMail({
+                from: nodemailerOptions.auth.user, // sender address
+                to: user.email,// + ", conextra.ee@outlook.com", // list of receivers
+                subject: domain + " account security code", // Subject line
+                text: strText, // plain text body
+                html: strHtml, // html body
+            },
+                callback
+            );
+
+
+            function maskEmail(email) {
+
+                email = (email + '').split('@');
+                email[0] = email[0].length > 3
+                    ? email[0].substr(0, 2) + '**********'
+                    : email[0].substr(0, 1) + '**********';
+
+                return email.join('@');
+            }
+        }
     }
 
     // Debugging
@@ -874,6 +935,10 @@ function generateSecurityCode() {
 function calcFilePath(filePath) {
 
     return path.resolve(path.parse(process.argv[1]).dir.split("node_modules").shift(), filePath);
+}
+function calcUserDataDir(userEmail) {
+
+    return calcFilePath(path.join(userConfigSets.pathToUsersDir, userEmail));
 }
 function calcUserDataFilePath(userEmail) {
 

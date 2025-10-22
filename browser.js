@@ -26,7 +26,7 @@
             CLOSED: { value: 3, writable: false, enumerable: false, configurable: false },
             PAUSE: { value: 4, writable: false, enumerable: false, configurable: false },
             CreateLink: { value: CreateLink, writable: false, enumerable: false, configurable: false },
-            wsUserURL: { value: (location.protocol == 'http:' ? 'ws://' : 'wss://') + location.hostname + ':' + ((location.port || location.protocol == 'http:' && 80 || 443) + 1), writable: true, enumerable: false, configurable: false },
+            wsUserURL: { value: (location.protocol == 'http:' ? 'ws://' : 'wss://') + location.hostname + ':' + ((Number(location.port) || location.protocol == 'http:' && 80 || 443) + 1), writable: true, enumerable: false, configurable: false },
             confirmMailModalTemplate: { value: 'templates/confirm-mail-modal.html', writable: true, enumerable: false, configurable: false },
             confirmMailTemplate: { value: 'templates/confirm-mail.html', writable: true, enumerable: false, configurable: false },
             resetPasswordModalTemplate: { value: 'templates/reset-password-modal.html', writable: true, enumerable: false, configurable: false },
@@ -101,7 +101,7 @@
                 wsUser.logout(conn_id);
             }
         }
-        function CreateLink(path, element) {
+        function CreateLink(path, element, isWsOnly = false) {
 
             if (CreateLink === this?.constructor) { throw new Error('CreateLink must be called without `new` keyword!'); }
 
@@ -123,7 +123,7 @@
                     if (!CreateLink.link_map[path].initDataContext) {
 
                         element.datacontext = CreateLink.link_map[path].datacontext;
-                        DB.bindAllElements(element, false, true);
+                        setTimeout(DB.bindAllElements, 10, element, false, true, true);
                     }
                 }
 
@@ -134,10 +134,14 @@
 
             if (wsLink) {
 
+                var localStorageValue = !isWsOnly && localStorage.getItem(path) || '';
                 CreateLink.link_map[path] = wsLink;
                 wsLink.elements = [element];
-                wsLink.datacontext = DC({});
+                wsLink.datacontext = DC(localStorageValue && JSON.parse(localStorageValue) || {});
+                wsLink.datacontext.resetChanges();
                 wsLink.initDataContext = true;
+
+                if (!isWsOnly && localStorageValue) { blndElements(); }
 
                 wsLink.intervalCheck = setInterval(function () {
 
@@ -148,27 +152,31 @@
                         clearInterval(wsLink.intervalCheck);
                         wsLink.close();
                         delete CreateLink.link_map[path];
+
+                        pDebug(`Link closed for path '${path}' - no elements connected.`);
                     }
                 }, 10000);
 
+                wsLink.onopen = function () {
+
+                    if (wsLink.datacontext?._isDataContext) {
+
+                        var strChanges = wsLink.datacontext.stringifyChanges();
+
+                        if (strChanges !== undefined) {
+
+                            wsLink.send(strChanges);
+                            initDataContext();
+                        }
+                    }
+                }
                 wsLink.onmessage = function (event) {
 
                     if (!wsLink.elements.length) { return; }
 
-                    if (wsLink.initDataContext) {
-
-                        delete wsLink.initDataContext;
-                        wsLink.datacontext.on('-change', onchange);
-
-                        wsLink.elements.forEach(function (elem) {
-
-                            elem.datacontext = wsLink.datacontext;
-                            DB.bindAllElements(elem, false, true);
-                        });
-                    }
-
                     wsLink.datacontext.overwritingData(event.data);
                     wsLink.datacontext.resetChanges();
+                    initDataContext();
                 };
                 wsLink.onclose = function (event) {
 
@@ -178,24 +186,57 @@
                     // 1008: Policy Violation 
                     //    The endpoint is terminating the connection because it received a message that violates its policy.
                     //    This is a generic status code, used when codes 1003 and 1009 are not suitable.
-                    if (event.code === 1008 && root_datacontext?.user?.isLogged) { return; }
+                    if (event.code === 1008 /*&& root_datacontext?.user?.isLogged*/) { return; }
 
                     reconnect();
                 };
+
+                pDebug(`Link created for path '${path}'`, wsLink);
             }
 
             return wsLink;
 
 
+            function initDataContext() {
+
+                if (wsLink.initDataContext && wsLink.datacontext?._isDataContext) {
+
+                    delete wsLink.initDataContext;
+                    wsLink.datacontext.on('-change', onchange);
+                    wsLink.datacontext.resetChanges();
+
+                    if (!isWsOnly) { localStorage.setItem(path, wsLink.datacontext.toString()); }
+
+                    blndElements();
+                }
+
+            }
+            function blndElements() {
+
+                clearTimeout(initDataContext.timeout);
+                initDataContext.timeout = setTimeout(function () {
+                    wsLink.elements.forEach(function (elem) {
+
+                        elem.datacontext = wsLink.datacontext;
+                        DB.bindAllElements(elem, true, true, true);
+                    });
+                }, 10);
+            }
             function onchange(event) {
 
                 clearTimeout(onchange.timeout);
 
                 onchange.timeout = setTimeout(function () {
 
-                    var strChanges = wsLink.datacontext.stringifyChanges();
+                    if (wsLink.readyState !== CreateWsUser.CLOSED
+                        && wsLink.readyState !== CreateWsUser.CLOSING) {
 
-                    if (strChanges !== undefined) { wsLink.send(strChanges); }
+                        var strChanges = wsLink.datacontext.stringifyChanges();
+
+                        if (strChanges !== undefined) { wsLink.send(strChanges); }
+                    }
+
+                    if (!isWsOnly) { localStorage.setItem(path, wsLink.datacontext.toString()); }
                 }, 10);
 
                 return wsLink?.elements?.length;
@@ -252,7 +293,7 @@
 
             if (!userEmail) { sendedData = null; }
 
-            if (userEmail) { protocols.push(userEmail.replace("@", "*")); }
+            if (userEmail) { protocols.push(encodeEmail(userEmail)); }
 
             if (protocol === 'ws-user') {
 
@@ -271,6 +312,7 @@
                     update_password: { value: update_password, writable: false, enumerable: false, configurable: false },
                     security_code: { value: security_code, writable: false, enumerable: false, configurable: false },
                     datacontext: { get: function () { return root_datacontext.user }, enumerable: false, configurable: false },
+                    upload_file: { value: upload_file, writable: false, enumerable: false, configurable: false }
                 });
 
                 //commands.userinfo = userinfo;
@@ -301,6 +343,8 @@
 
             function newWebSocket() {
 
+                if (protocols.length < 3 && userEmail) { protocols.push(encodeEmail(userEmail)); }
+
                 var _ws = new WebSocket(path, protocols);
 
                 _ws.BinaryData = 'ArrayBuffer';
@@ -314,7 +358,7 @@
             }
             // Event handlers
             function onWsOpen() {
-
+                
                 pDebug('Connection opened');
                 setReadyState(CreateWsUser.OPEN);
                 if (sendedData) { send(sendedData); }
@@ -477,7 +521,37 @@
 
                 send('$security_code:' + masking(`${email}:${code}:${resetPassword}`, connID));
             }
+            function upload_file(fileName, dataURL) {
+
+                fileName = (fileName + '').trim();
+                if (fileName[0] === '/') { fileName = fileName.substring(1); }
+                if (fileName[0] === '\\') { fileName = fileName.substring(1); }
+                if (fileName[fileName.length - 1] === '/') { fileName = fileName.substring(0, fileName.length - 1); }
+
+                dataURL = (dataURL + '').trim();
+
+                if (!fileName || !dataURL) {
+
+                    pError('Invalid file name or data URL.');
+                    return;
+                }
+
+                if (dataURL.length > 20000000) { // 20MB
+
+                    pError('Data URL is too large. Maximum size is 20MB.');
+                    return;
+                }
+
+                if (!dataURL.startsWith('data:')) {
+
+                    pError('Invalid data URL format. It should start with "data:".');
+                    return;
+                }
+
+                send(`$upload_file:${fileName}:${dataURL}`);
+            }
             // Private methods
+            function encodeEmail(email) { return email.replace("@", "*"); }
             function autoLogin() {
 
                 if (!root_datacontext?.user?.isLogged && 'credentials' in navigator) {

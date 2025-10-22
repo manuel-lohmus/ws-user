@@ -1,7 +1,7 @@
 {
   "name": "ws-user",
   "description": "User authentication and authorization for WebSocket applications.",
-  "version": "1.0.0-rc.3",
+  "version": "1.0.0-rc.4",
   "license": "MIT",
   "keywords": [
     "conextra",
@@ -44,9 +44,9 @@
     "test": "echo \"No test specified\""
   },
   "dependencies": {
-    "config-sets": "^3.0.0-rc.1",
-    "data-context": "^2.0.0-rc.1",
-    "nodemailer": "^7.0.3",
+    "config-sets": "^3.0.0",
+    "data-context": "^2.0.0",
+    "nodemailer": "~7.0.9",
     "ws13": "^1.0.9"
   },
   "homepage": "https://github.com/manuel-lohmus/ws-user#readme",
@@ -54,6 +54,5 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/manuel-lohmus/ws-user.git"
-  },
-  "funding": "https://manuel-lohmus.github.io/ws-user/README.html#license"
+  }
 }
