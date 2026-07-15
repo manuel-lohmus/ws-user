@@ -9,6 +9,7 @@
         var globalScope = this,
             script = this.document && Array.from(document.scripts).find(function (s) { return s.src.includes('ws-user'); }),
             isDebug = Boolean(script?.attributes.debug) || false,
+            scriptUrl = script?.attributes?.url?.value || (location.protocol == 'http:' ? 'ws://' : 'wss://') + location.hostname + ':' + ((Number(location.port) || location.protocol == 'http:' && 80 || 443) + 1),
             wsOrigin = '',
             wsUser = null,
             userEmail = '',
@@ -26,14 +27,14 @@
             CLOSED: { value: 3, writable: false, enumerable: false, configurable: false },
             PAUSE: { value: 4, writable: false, enumerable: false, configurable: false },
             CreateLink: { value: CreateLink, writable: false, enumerable: false, configurable: false },
-            wsUserURL: { value: (location.protocol == 'http:' ? 'ws://' : 'wss://') + location.hostname + ':' + ((Number(location.port) || location.protocol == 'http:' && 80 || 443) + 1), writable: true, enumerable: false, configurable: false },
+            wsUserURL: { value: scriptUrl, writable: true, enumerable: false, configurable: false },
             confirmMailModalTemplate: { value: 'templates/confirm-mail-modal.html', writable: true, enumerable: false, configurable: false },
             confirmMailTemplate: { value: 'templates/confirm-mail.html', writable: true, enumerable: false, configurable: false },
             resetPasswordModalTemplate: { value: 'templates/reset-password-modal.html', writable: true, enumerable: false, configurable: false },
             resetPasswordTemplate: { value: 'templates/reset-password.html', writable: true, enumerable: false, configurable: false },
         });
 
-
+        // Public methods
         function CreateWsUser({
             debugMode = undefined,
             url = ''
@@ -96,8 +97,7 @@
             }
             function logout(conn_id = '') {
 
-                if (onclick.obj && Object.keys(onclick.obj).length) 
-                { wsUser.send('$log:' + JSON.stringify(onclick.obj)); }
+                if (onclick.obj && Object.keys(onclick.obj).length) { wsUser.send('$log:' + JSON.stringify(onclick.obj)); }
                 wsUser.logout(conn_id);
             }
         }
@@ -115,7 +115,7 @@
             if (!CreateLink.link_map) { CreateLink.link_map = Object.create(null); }
 
             if (CreateLink.link_map[path]) {
-                
+
                 if (!CreateLink.link_map[path].elements.includes(element)) {
 
                     CreateLink.link_map[path].elements.push(element);
@@ -314,8 +314,6 @@
                     datacontext: { get: function () { return root_datacontext.user }, enumerable: false, configurable: false },
                     upload_file: { value: upload_file, writable: false, enumerable: false, configurable: false }
                 });
-
-                //commands.userinfo = userinfo;
             }
 
             ws = newWebSocket();
@@ -358,7 +356,7 @@
             }
             // Event handlers
             function onWsOpen() {
-                
+
                 pDebug('Connection opened');
                 setReadyState(CreateWsUser.OPEN);
                 if (sendedData) { send(sendedData); }
@@ -432,7 +430,7 @@
                 if (event.code === 1000 || event.code === 1008) { return; }
 
                 if (userEmail && self.onuserinfo && ws?.protocol === "ws-user") {
-                    
+
                     self.onuserinfo({ userinfo: { message: 'Connection lost. Reconnecting...', alerttype: 'alert-warning' } });
                 }
 

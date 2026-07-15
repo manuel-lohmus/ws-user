@@ -55,6 +55,26 @@ var nodemailer = require("nodemailer"),
  */
 function sendMail(mailOptions, callback) {
 
+    // Validate email addresses to prevent DoS via CVE-2025-14874 (uncontrolled recursion in addressparser)
+    var addressFields = ['to', 'cc', 'bcc'];
+    for (var i = 0; i < addressFields.length; i++) {
+        var field = mailOptions[addressFields[i]];
+        if (field) {
+            var addresses = field.split(',').map(function (a) { return a.trim(); });
+            for (var j = 0; j < addresses.length; j++) {
+                var addr = addresses[j];
+                // RFC 5322 email validation: local-part@domain
+                if (addr && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
+                    return callback(new Error("Invalid email address: " + addr));
+                }
+                // Reject addresses with excessive colons (recursive group structure attack)
+                if (addr && (addr.match(/:/g) || []).length > 1) {
+                    return callback(new Error("Invalid email address format: " + addr));
+                }
+            }
+        }
+    }
+
     if (nodemailerOptions.auth.user === "*user*@localhost" || nodemailerOptions.auth.pass === "") {
 
         var errorMessage = "Please configure 'nodemailer' transporter options in 'config-sets.json' file.\n\tSee options: https://nodemailer.com/smtp/";
@@ -134,10 +154,10 @@ function CreateWsUser({
 
     if (CreateWsUser === this?.constructor) { throw new Error('CreateWsUser must be called without `new` keyword!'); }
 
-        /**
-         * CONNECTING: 0 | OPEN: 1 | CLOSING: 2 | CLOSED: 3 | PAUSE: 4  
-         * @type {0|1|2|3|4} readyState 
-         */
+    /**
+     * CONNECTING: 0 | OPEN: 1 | CLOSING: 2 | CLOSED: 3 | PAUSE: 4  
+     * @type {0|1|2|3|4} readyState 
+     */
     var readyState = CreateWsUser.CONNECTING,
         isWsUser = false,
         connID = '',
@@ -206,12 +226,12 @@ function CreateWsUser({
 
         if (headers?.['sec-websocket-protocol']) {
 
-            var[pro, id, mail] = headers['sec-websocket-protocol']
+            var [pro, id, mail] = headers['sec-websocket-protocol']
                 .replace(/,+/g, ' ')
                 .split(' ')
                 .filter(p => p);
 
-            protocol = pro ? pro : protocol; 
+            protocol = pro ? pro : protocol;
             connID = id ? id : '';
             email = mail ? mail.replace("*", "@") : '';
 
@@ -350,7 +370,7 @@ function CreateWsUser({
             return true;
         }
 
-        return false; 
+        return false;
 
         function parseMsg(message) {
 
